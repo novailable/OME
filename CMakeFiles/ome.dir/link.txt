@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/ome.dir/main.cpp.o -o ome  libome_parser.a 

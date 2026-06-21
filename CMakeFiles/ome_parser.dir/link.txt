@@ -1,0 +1,2 @@
+/usr/bin/ar qc libome_parser.a CMakeFiles/ome_parser.dir/src/parser/Parser.cpp.o
+/usr/bin/ranlib libome_parser.a
