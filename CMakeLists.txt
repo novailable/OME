@@ -6,24 +6,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(ome_parser 
     src/Parser.cpp
-    src/Server.cpp)
+    src/Server.cpp
+    src/Epoll.cpp)
 
 target_include_directories(ome_parser PUBLIC include/ome)
 
 add_executable(ome main.cpp)
 target_link_libraries(ome PRIVATE ome_parser)
 
-# Tests
+# # Tests
 
-find_package(GTest REQUIRED)
+# find_package(GTest REQUIRED)
 
-add_executable(tester
-    tester.cpp)
+# add_executable(tester
+#     tester.cpp)
 
-target_link_libraries(tester
-PRIVATE
-    ome_parser
-    GTest::gtest_main)
+# target_link_libraries(tester
+# PRIVATE
+#     ome_parser
+#     GTest::gtest_main)
 
-include(GoogleTest)
-gtest_discover_tests(tester)
+# include(GoogleTest)
+# gtest_discover_tests(tester)

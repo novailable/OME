@@ -10,23 +10,31 @@
 #include <iostream>
 #include <unistd.h>
 #include <fcntl.h>
+#include <set>
+#include <unordered_map>
 
-class   Server
+#include "Fd.h"
+#include "IPollable.hpp"
+
+class   Server : public IPollable
 {
     private:
-        std::string _ip;
-        int _srvfd, _epfd;
+        std::string _ip, _port;
+        Fd _fd;
         std::set<int>   clients;
-        void    epoll_init();
         std::unordered_map<int, std::string>    _clients;
+
+        void    read();
+
 
     public:
         Server();
         ~Server();
-        void    run(std::string &ip, std::string port);
+        void    create_socket(std::string &ip, std::string port);
+        void    handle(uint32_t);
+        // bool    is_timeout() const;
+        // void    timeout();
+        // void    cleanup();
         void    end();
-        void    epoll_add(int fd, uint32_t events);
-        void    epoll_mod(int fd, uint32_t events);
-        void    epoll_del(int fd);
-        static void    set_nblock(int fd);
+        int     fd() const;
 };

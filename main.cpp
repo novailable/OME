@@ -1,5 +1,6 @@
 #include "Parser.hpp"
 #include "Server.hpp"
+#include "Reactor.hpp"
 
 int	main()
 {
@@ -10,10 +11,14 @@ int	main()
         "150=E\x01" "39=E\x01" "55=MSFT\x01" "167=CS\x01" "54=1\x01" "38=15\x01"
         "40=2\x01" "44=15\x01" "58=PHLX EQUITY TESTING\x01" "59=0\x01" "47=C\x01"
         "32=0\x01" "31=0\x01" "151=15\x01" "14=0\x01" "6=0\x01" "10=128\x01";	
-	Parser parser(msg);
+	// Parser parser(msg);
     Server  server;
-    server.run(ip, port);
+    server.create_socket(ip, port);
+    Epoll   epoll;
+    epoll.init();
+    // Reactor reactor(epoll);
+    // Reactor
     
-    std::cout << parser[8] << std::endl;
+    // std::cout << parser[8] << std::endl;
 	std::cout << "Cmake is working" << std::endl;
 }

@@ -166,29 +166,53 @@ main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome.dir/build.make CMakeFiles/ome.dir/main.cpp.s
 .PHONY : main.cpp.s
 
-src/parser/Parser.o: src/parser/Parser.cpp.o
-.PHONY : src/parser/Parser.o
+src/Parser.o: src/Parser.cpp.o
+.PHONY : src/Parser.o
 
 # target to build an object file
-src/parser/Parser.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/parser/Parser.cpp.o
-.PHONY : src/parser/Parser.cpp.o
+src/Parser.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/Parser.cpp.o
+.PHONY : src/Parser.cpp.o
 
-src/parser/Parser.i: src/parser/Parser.cpp.i
-.PHONY : src/parser/Parser.i
+src/Parser.i: src/Parser.cpp.i
+.PHONY : src/Parser.i
 
 # target to preprocess a source file
-src/parser/Parser.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/parser/Parser.cpp.i
-.PHONY : src/parser/Parser.cpp.i
+src/Parser.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/Parser.cpp.i
+.PHONY : src/Parser.cpp.i
 
-src/parser/Parser.s: src/parser/Parser.cpp.s
-.PHONY : src/parser/Parser.s
+src/Parser.s: src/Parser.cpp.s
+.PHONY : src/Parser.s
 
 # target to generate assembly for a file
-src/parser/Parser.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/parser/Parser.cpp.s
-.PHONY : src/parser/Parser.cpp.s
+src/Parser.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/Parser.cpp.s
+.PHONY : src/Parser.cpp.s
+
+src/Server.o: src/Server.cpp.o
+.PHONY : src/Server.o
+
+# target to build an object file
+src/Server.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/Server.cpp.o
+.PHONY : src/Server.cpp.o
+
+src/Server.i: src/Server.cpp.i
+.PHONY : src/Server.i
+
+# target to preprocess a source file
+src/Server.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/Server.cpp.i
+.PHONY : src/Server.cpp.i
+
+src/Server.s: src/Server.cpp.s
+.PHONY : src/Server.s
+
+# target to generate assembly for a file
+src/Server.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_parser.dir/build.make CMakeFiles/ome_parser.dir/src/Server.cpp.s
+.PHONY : src/Server.cpp.s
 
 # Help Target
 help:
@@ -203,9 +227,12 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
-	@echo "... src/parser/Parser.o"
-	@echo "... src/parser/Parser.i"
-	@echo "... src/parser/Parser.s"
+	@echo "... src/Parser.o"
+	@echo "... src/Parser.i"
+	@echo "... src/Parser.s"
+	@echo "... src/Server.o"
+	@echo "... src/Server.i"
+	@echo "... src/Server.s"
 .PHONY : help
 
 
