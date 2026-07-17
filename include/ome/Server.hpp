@@ -15,6 +15,7 @@
 
 #include "Fd.h"
 #include "IPollable.hpp"
+#include "ClientManager.hpp"
 
 class   Server : public IPollable
 {
