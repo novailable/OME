@@ -27,29 +27,23 @@ void Reactor::run()
 
     while (_running)
     {
-        int hits = _poller.wait(events, 1024, 1000);
-
-        if (hits < 0)
+        if (_poller.wait(events, 1024, 1000) < 0)
         {
             if (errno == EINTR)
                 continue;
 
             throw_("epoll wait failed");
         }
-
-
-        for (int i = 0; i < hits; i++)
+        for (auto event : events)
         {
             IPollable* obj =
-                static_cast<IPollable*>(events[i].data.ptr);
+                static_cast<IPollable*>(event.data.ptr);
 
             if (!obj)
                 continue;
 
-            obj->handle(events[i].events);
+            obj->handle(event.events);        
         }
-
-
         // Handle timeout objects
         // _poller.objs_timeout();
     }

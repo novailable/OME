@@ -15,8 +15,11 @@ class Client : public IPollable
         uint16_t    _port;
         sockaddr_in    _addr{};
 
+        std::string _buffer;
+
     public:
         Client(int fd, sockaddr_in addr);
+        ~Client();
         void    handle(uint32_t events);
         int fd() const;
         

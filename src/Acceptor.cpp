@@ -45,6 +45,7 @@ void    Acceptor::create_socket(std::string &ip, std::string port)
             throw_("bind() failed");
         if (listen(_fd, SOMAXCONN) < 0)
             throw_("listen() failed");
+        _fd.set_nblock();
     }
     catch (std::exception &e)
     {
