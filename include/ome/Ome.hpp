@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Server.hpp"
-#include "Reactor.hpp"
 
-Class   Ome
+class   Ome
 {
-
+    private:
+        Server  _server;
     public:
-        
+        Ome();
+        ~Ome();
         void    run();
 };

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <fcntl.h>
+#include <unistd.h>
+
 #include "Utils.hpp"
 
 class Fd
@@ -15,8 +17,8 @@ class Fd
         Fd  &operator=(const Fd&) = delete;
         Fd  &operator=(int fd)
         {
-            close();
-            _fd = fd;
+            if (_fd < 0)
+                _fd = fd;
             return (*this);
         }
         ~Fd() { close(); }

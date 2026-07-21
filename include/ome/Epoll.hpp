@@ -17,7 +17,6 @@ struct Epoll
 {
 	private: 
 		Fd	_fd;
-		std::map<int, IPollable*>	_objs;
 	public:
 		Epoll();
 		~Epoll();
@@ -31,10 +30,8 @@ struct Epoll
 		int mod_fd(IPollable* poll_obj, uint32_t events);
 		int del_fd(Fd fd_);
 
-		int	run();
-
 		int wait(struct epoll_event *events, int maxevents, int timeout);
-		void	objs_timeout();
+		// void	objs_timeout();
 
 		int	fd() const;
 };

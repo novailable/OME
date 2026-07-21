@@ -16,13 +16,14 @@
 #include "Fd.h"
 #include "IPollable.hpp"
 #include "ClientManager.hpp"
+#include "Utils.hpp"
 
 class   Acceptor : public IPollable
 {
     private:
         std::string _ip, _port;
         Fd _fd;
-        ClientManager   &_c_manager = nullptr;
+        ClientManager   *_c_manager;
 
 
     public:

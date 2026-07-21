@@ -2,6 +2,7 @@
 
 #include "Epoll.hpp"
 #include "IPollable.hpp"
+#include "Utils.hpp"
 
 #include <sys/epoll.h>
 #include <atomic>
@@ -17,6 +18,6 @@ public:
     ~Reactor();
 
     void run();
-    void add(IPollable* poll_obj, uint32_t events)
+    void add(IPollable* poll_obj, uint32_t events);
     void stop();
 };

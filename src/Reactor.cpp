@@ -4,6 +4,7 @@
 Reactor::Reactor() : _running(false)
 {
     _poller.init();
+    std::cout << "epoll initialized" << std::endl;
 }
 
 
@@ -12,7 +13,7 @@ Reactor::~Reactor()
     stop();
 }
 
-Reactor::add(IPollable* poll_obj, uint32_t events)
+void    Reactor::add(IPollable* poll_obj, uint32_t events)
 {
     _poller.add_fd(poll_obj, events);
 }
@@ -45,12 +46,12 @@ void Reactor::run()
             if (!obj)
                 continue;
 
-            obj->handle(events[i]);
+            obj->handle(events[i].events);
         }
 
 
         // Handle timeout objects
-        _poller.objs_timeout();
+        // _poller.objs_timeout();
     }
 }
 

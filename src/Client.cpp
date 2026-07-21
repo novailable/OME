@@ -6,16 +6,16 @@ Client::Client(int fd, sockaddr_in addr) : _fd(fd), _addr(addr)
     _port = ntohs(_addr.sin_port);
 
     _fd.set_nblock();
-    _time = time(NULL);
+    // _time = time(NULL);
 
-    std::cout << "[connection]\tclient connected\t\t| " << _ip << ":" 
+    std::cout << "[client]\tclient connected\t\t| " << _ip << ":" 
                 << _port << " | socket:" << _fd << std::endl;
 
 }
 
-Client::handle(uint32_t events)
+void    Client::handle(uint32_t events)
 {
-
+    
 }
 
 int Client::fd() const

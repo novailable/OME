@@ -6,22 +6,20 @@ Epoll::Epoll() : _fd(-1) {}
 
 Epoll::~Epoll()
 {
-	std::set<IPollable*>	destory;
+	// std::set<IPollable*>	destory;
 
-	for (auto it = _objs.begin(); it != _objs.end(); ++it)
-	{
-		IPollable* obj = it->second;
-		if (obj)
-			destory.insert(obj);
-	}
-	for (std::set<IPollable*>::iterator it = destory.begin(); it != destory.end(); ++it)
-	{
-		IPollable* obj = *it;
-		if (obj)
-			obj->cleanup();
-	}
-	if (_fd >= 0)
-		close(_fd);
+	// for (auto it = _objs.begin(); it != _objs.end(); ++it)
+	// {
+	// 	IPollable* obj = it->second;
+	// 	if (obj)
+	// 		destory.insert(obj);
+	// }
+	// for (std::set<IPollable*>::iterator it = destory.begin(); it != destory.end(); ++it)
+	// {
+	// 	IPollable* obj = *it;
+	// 	if (obj)
+	// 		obj->cleanup();
+	// }
 }
 
 Epoll&	Epoll::instance()
@@ -49,7 +47,8 @@ int	Epoll::add_fd(IPollable* poll_obj, uint32_t events)
 	int status = epoll_ctl(_fd, EPOLL_CTL_ADD, obj_fd, &ev);
 	if (status < 0)
 		throw_("epoll_ctl ADD failed!");
-	_objs[obj_fd] = poll_obj;
+	// _objs[obj_fd] = poll_obj;
+
 	return (status);
 }
 
@@ -71,9 +70,9 @@ int Epoll::del_fd(Fd fd_)
     if (_fd < 0 || fd_ < 0)
         return (-1);
     
-	if (!_objs.count(fd_))
-		throw_("No fd found!");
-    _objs.erase(fd_);
+	// if (!_objs.count(fd_))
+	// 	throw_("No fd found!");
+    // _objs.erase(fd_);
     
    	int status = epoll_ctl(_fd, EPOLL_CTL_DEL, fd_, NULL);
     if (status < 0)
@@ -88,33 +87,33 @@ int Epoll::wait(struct epoll_event *events, int maxevents, int timeout)
 	return (epoll_wait(_fd, events, maxevents, timeout));
 }
 
-void Epoll::objs_timeout()
-{
-    std::vector<IPollable*> timed_out;
-    std::set<IPollable*> seen;
+// void Epoll::objs_timeout()
+// {
+//     std::vector<IPollable*> timed_out;
+//     std::set<IPollable*> seen;
     
-    // Collect unique timed-out objects
-    for (auto it = _objs.begin(); it != _objs.end(); ++it)
-    {
-        IPollable* obj = it->second;
-        if (obj && obj->is_timeout())
-        {
-            if (seen.find(obj) == seen.end())
-            {
-                seen.insert(obj);
-                timed_out.push_back(obj);
-            }
-        }
-    }
+//     // Collect unique timed-out objects
+//     for (auto it = _objs.begin(); it != _objs.end(); ++it)
+//     {
+//         IPollable* obj = it->second;
+//         if (obj && obj->is_timeout())
+//         {
+//             if (seen.find(obj) == seen.end())
+//             {
+//                 seen.insert(obj);
+//                 timed_out.push_back(obj);
+//             }
+//         }
+//     }
     
-    // Call timeout on collected objects
-    for (size_t i = 0; i < timed_out.size(); ++i)
-    {
-        IPollable* obj = timed_out[i];
-        if (obj)
-            obj->timeout();
-    }
-}
+//     // Call timeout on collected objects
+//     for (size_t i = 0; i < timed_out.size(); ++i)
+//     {
+//         IPollable* obj = timed_out[i];
+//         if (obj)
+//             obj->timeout();
+//     }
+// }
 
 int	Epoll::fd() const
 {

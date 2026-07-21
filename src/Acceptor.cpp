@@ -1,7 +1,7 @@
 #include "Server.hpp"
 #include "Utils.hpp"
 
-Acceptor::Acceptor() : _fd(-1), _c_manager() {}
+Acceptor::Acceptor() : _fd(-1) , _c_manager(nullptr) {}
 
 Acceptor::~Acceptor()
 {
@@ -16,7 +16,7 @@ Acceptor::~Acceptor()
 
 void    Acceptor::set_c_manager(ClientManager &c_manager)
 {
-    _c_manager = c_manager;
+    _c_manager = &c_manager;
 }
 
 void    Acceptor::create_socket(std::string &ip, std::string port)
@@ -46,8 +46,9 @@ void    Acceptor::create_socket(std::string &ip, std::string port)
         if (listen(_fd, SOMAXCONN) < 0)
             throw_("listen() failed");
     }
-    catch (...)
+    catch (std::exception &e)
     {
+        std::cout << e.what() << std::endl;
         freeaddrinfo(result);
         throw;
     }
@@ -58,11 +59,7 @@ void    Acceptor::create_socket(std::string &ip, std::string port)
 
 void    Acceptor::end()
 {
-    if (_fd >= 0)
-    {
-        ::close(_fd);
-        _fd = -1;
-    }
+    _fd.close();
 }
 
 int Acceptor::fd() const
@@ -87,12 +84,9 @@ void    Acceptor::handle(uint32_t events)
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 return;
 
-            fail("Connection: Accept", errno);
+            throw_("Connection: Accept");
             return;
         }
-        _cmanager.add(client_fd, addr);
-        std::cout << "[connection]\tclient connected\t\t| " << _ip << ":" 
-                    << _port << " | socket:" << _fd << std::endl;
-
+        _c_manager->create(client_fd, client_addr);
     }
 }
