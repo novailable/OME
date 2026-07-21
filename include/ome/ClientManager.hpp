@@ -9,6 +9,9 @@ class   ClientManager
         Reactor&    _reactor;
         std::unordered_map<int, std::unique_ptr<Client>>    _sessions;
     public:
-        ClientManager(Reactor &reactor);
-        void    create(int fd);
+        ClientManager();
+        
+        // ClientManager(Reactor &reactor);
+        void    set_reactor(Reactor& reactor);
+        void    create(int fd, sockaddr_in addr);
 };

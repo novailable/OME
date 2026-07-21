@@ -1,15 +1,20 @@
 #include "Reactor.hpp"
 #include "Utils.hpp"
 
-Reactor::Reactor(Epoll& poller)
-    : _poller(poller), _running(false)
+Reactor::Reactor() : _running(false)
 {
+    _poller.init();
 }
 
 
 Reactor::~Reactor()
 {
     stop();
+}
+
+Reactor::add(IPollable* poll_obj, uint32_t events)
+{
+    _poller.add_fd(poll_obj, events);
 }
 
 
@@ -40,7 +45,7 @@ void Reactor::run()
             if (!obj)
                 continue;
 
-            obj->handle_event(events[i]);
+            obj->handle(events[i]);
         }
 
 

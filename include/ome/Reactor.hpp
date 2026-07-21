@@ -9,13 +9,14 @@
 class Reactor
 {
 private:
-    Epoll&              _poller;
+    Epoll              _poller;
     std::atomic<bool>   _running;
 
 public:
-    Reactor(Epoll& poller);
+    Reactor();
     ~Reactor();
 
     void run();
+    void add(IPollable* poll_obj, uint32_t events)
     void stop();
 };

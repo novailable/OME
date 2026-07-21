@@ -6,10 +6,13 @@
 class Client : public IPollable
 {
     private:
-        Fd  _fd = -1;
+        Fd  _fd;
+        std::string _ip, _port;
+        sockaddr    _addr{};
+
     public:
-        Client(int fd);
+        Client(int fd, sockaddr addr);
         void    hanlde(uint32_t events);
         int fd() const;
         
-}
+};
