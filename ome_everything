@@ -55,8 +55,11 @@ class Client : public IPollable
         uint16_t    _port;
         sockaddr_in    _addr{};
 
+        std::string _buffer;
+
     public:
         Client(int fd, sockaddr_in addr);
+        ~Client();
         void    handle(uint32_t events);
         int fd() const;
         
@@ -325,6 +328,7 @@ void    Acceptor::create_socket(std::string &ip, std::string port)
             throw_("bind() failed");
         if (listen(_fd, SOMAXCONN) < 0)
             throw_("listen() failed");
+        _fd.set_nblock();
     }
     catch (std::exception &e)
     {
@@ -383,16 +387,38 @@ Client::Client(int fd, sockaddr_in addr) : _fd(fd), _addr(addr)
                 << _port << " | socket:" << _fd << std::endl;
 
 }
+Client::~Client()
+{
+    std::cout << "client quit" << std::endl;
+}
 
 void    Client::handle(uint32_t events)
 {
-    
+    char    buffer[4096];
+
+    while(true)
+    {
+        ssize_t bytes = recv(_fd, buffer, sizeof(buffer), 0);
+        if (bytes > 0)
+        {
+            _buffer.append(buffer, bytes);
+            continue;
+        }
+        else if (bytes == 0)
+        {
+            delete this;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            break;
+    }
 }
 
 int Client::fd() const
 {
     return (_fd);
-}#include "ClientManager.hpp"
+}
+
+#include "ClientManager.hpp"
 
 // ClientManager::ClientManager(Reactor &reactor) : _reactor(reactor) {}
 
@@ -406,7 +432,7 @@ void    ClientManager::create(int fd, sockaddr_in addr)
     std::unique_ptr<Client> client = std::make_unique<Client>(fd, addr);
     _clients.emplace(fd, std::move(client));
     _reactor->add(_clients[fd].get(), EPOLLIN);
-    
+    std::cout << "client is added to epoll" << std::endl;
 }
 
 void    ClientManager::set_reactor(Reactor& reactor)
@@ -622,32 +648,27 @@ void Reactor::run()
     _running = true;
 
     epoll_event events[1024]{};
+    
 
     while (_running)
     {
-        int hits = _poller.wait(events, 1024, 1000);
-
-        if (hits < 0)
+        if (_poller.wait(events, 1024, 1000) < 0)
         {
             if (errno == EINTR)
                 continue;
 
             throw_("epoll wait failed");
         }
-
-
-        for (int i = 0; i < hits; i++)
+        for (auto event : events)
         {
             IPollable* obj =
-                static_cast<IPollable*>(events[i].data.ptr);
+                static_cast<IPollable*>(event.data.ptr);
 
             if (!obj)
                 continue;
 
-            obj->handle(events[i].events);
+            obj->handle(event.events);        
         }
-
-
         // Handle timeout objects
         // _poller.objs_timeout();
     }

@@ -19,4 +19,5 @@ class   ClientManager
         // ClientManager(Reactor &reactor);
         void    set_reactor(Reactor& reactor);
         void    create(int fd, sockaddr_in addr);
+        void    remove(int fd);
 };

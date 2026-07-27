@@ -1,6 +1,7 @@
 #include "Client.hpp"
+#include "ClientManager.hpp"
 
-Client::Client(int fd, sockaddr_in addr) : _fd(fd), _addr(addr)
+Client::Client(int fd, sockaddr_in addr, ClientManager *manager) : _fd(fd), _addr(addr), _manager(manager)
 {
     _ip = inet_ntoa(_addr.sin_addr);
     _port = ntohs(_addr.sin_port);
@@ -13,9 +14,7 @@ Client::Client(int fd, sockaddr_in addr) : _fd(fd), _addr(addr)
 
 }
 Client::~Client()
-{
-    std::cout << "client quit" << std::endl;
-}
+{}
 
 void    Client::handle(uint32_t events)
 {
@@ -31,11 +30,19 @@ void    Client::handle(uint32_t events)
         }
         else if (bytes == 0)
         {
-            delete this;
+            cleanup();
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             break;
     }
+}
+
+void    Client::cleanup()
+{
+    std::cout << "[client]\tclient disconnected\t\t| " << _ip << ":" 
+                << _port << " | socket:" << _fd << std::endl;
+    _manager->remove(_fd);
+
 }
 
 int Client::fd() const

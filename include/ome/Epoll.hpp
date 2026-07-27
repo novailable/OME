@@ -28,7 +28,7 @@ struct Epoll
 
 		int add_fd(IPollable* poll_obj,uint32_t events);
 		int mod_fd(IPollable* poll_obj, uint32_t events);
-		int del_fd(Fd fd_);
+		int del_fd(IPollable* poll_obj);
 
 		int wait(struct epoll_event *events, int maxevents, int timeout);
 		// void	objs_timeout();

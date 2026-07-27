@@ -18,6 +18,10 @@ void    Reactor::add(IPollable* poll_obj, uint32_t events)
     _poller.add_fd(poll_obj, events);
 }
 
+void    Reactor::del(IPollable* poll_obj)
+{
+    _poller.del_fd(poll_obj);
+}
 
 void Reactor::run()
 {
@@ -25,24 +29,26 @@ void Reactor::run()
 
     epoll_event events[1024]{};
 
+
     while (_running)
     {
-        if (_poller.wait(events, 1024, 1000) < 0)
+        int hits = _poller.wait(events, 1024, 1000);
+        if (hits < 0)
         {
             if (errno == EINTR)
                 continue;
 
             throw_("epoll wait failed");
         }
-        for (auto event : events)
+        for (int i = 0; i < hits; ++i)
         {
             IPollable* obj =
-                static_cast<IPollable*>(event.data.ptr);
+                static_cast<IPollable*>(events[i].data.ptr);
 
             if (!obj)
                 continue;
 
-            obj->handle(event.events);        
+            obj->handle(events[i].events);        
         }
         // Handle timeout objects
         // _poller.objs_timeout();

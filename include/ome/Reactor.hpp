@@ -5,6 +5,7 @@
 #include "Utils.hpp"
 
 #include <sys/epoll.h>
+#include <queue>
 #include <atomic>
 
 class Reactor
@@ -19,5 +20,6 @@ public:
 
     void run();
     void add(IPollable* poll_obj, uint32_t events);
+    void del(IPollable* poll_obj);
     void stop();
 };

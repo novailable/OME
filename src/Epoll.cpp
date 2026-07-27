@@ -65,16 +65,10 @@ int Epoll::mod_fd(IPollable* poll_obj, uint32_t events)
 	return (status);
 }
 
-int Epoll::del_fd(Fd fd_)
+int Epoll::del_fd(IPollable* poll_obj)
 {
-    if (_fd < 0 || fd_ < 0)
-        return (-1);
-    
-	// if (!_objs.count(fd_))
-	// 	throw_("No fd found!");
-    // _objs.erase(fd_);
-    
-   	int status = epoll_ctl(_fd, EPOLL_CTL_DEL, fd_, NULL);
+    int	obj_fd = poll_obj->fd();
+   	int status = epoll_ctl(_fd, EPOLL_CTL_DEL, obj_fd, NULL);
     if (status < 0)
 		throw_("epoll_ctl DELETE failed!");
     return (status);
