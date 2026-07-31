@@ -17,8 +17,10 @@ class Client : public IPollable
         uint16_t    _port;
         sockaddr_in    _addr{};
         ClientManager  *_manager;
+        
 
         std::string _buffer;
+        std::unordered_map<
 
     public:
         Client(int fd, sockaddr_in addr, ClientManager *manager);

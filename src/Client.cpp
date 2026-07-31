@@ -26,6 +26,7 @@ void    Client::handle(uint32_t events)
         if (bytes > 0)
         {
             _buffer.append(buffer, bytes);
+            
             continue;
         }
         else if (bytes == 0)

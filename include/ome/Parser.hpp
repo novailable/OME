@@ -1,34 +1,30 @@
-#	pragma once
-
-#include <string>
-#include <string_view>
-#include <charconv>
-#include <iostream>
+#pragma once
 #include <vector>
-#include <map>
-#include <cstdlib>
+#include <string_view>
 #include <optional>
+#include <cstdint>
+#include "NewOrderRequest.h"
 
-#define DELIM '\x01'
-#define EQUAL '='
+class Parser {
+public:
+    void feed(const char* data, size_t len);
 
-// "8=FIX.4.2\x019=178\x0135=8\x0149=PHLX\x0156=PERS\x0152=20071123-05:30:00.000\x0111=ATOMNOCCC9990900\x0120=3\x01150=E\x0139=E\x0155=MSFT\x01167=CS\x0154=1\x0138=15\x0140=2\x0144=15\x0158=PHLX EQUITY TESTING\x0159=0\x0147=C\x0132=0\x0131=0\x01151=15\x0114=0\x016=0\x0110=128\x01";
+    // Parses as many complete messages as are available, moving each
+    // directly into the returned vector. No intermediate map, no per-byte copy.
+    std::vector<NewOrderRequest> extractOrders();
 
-std::vector<std::string>	split_msg(const std::string &msg);
-void	print_container(const std::vector<std::string> &container);
+    void reset();
 
-class Parser
-{
-	private:
-		std::string	_raw;
-		std::map<int, std::string_view>	_items;
+private:
+    std::vector<char> buffer_;
+    size_t read_pos_ = 0; // where unconsumed data starts
 
-	public:
-		Parser(std::string msg);
-		void	print();
-		std::optional<std::string_view>	get(int tag) const;
+    static constexpr char SOH = '\x01';
 
-		std::optional<std::string_view>	operator[](int tag) const;
+    // View-only scan — no copying, no allocation, just pointers into buffer_.
+    std::optional<size_t> tryFindCompleteMessage(std::string_view view) const;
+
+    NewOrderRequest parseOrder(std::string_view msg) const;
+
+    void compactIfNeeded();
 };
-
-std::ostream	&operator<<(std::ostream& out, const std::optional<std::string_view>& data);
