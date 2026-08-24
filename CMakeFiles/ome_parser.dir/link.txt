@@ -1,0 +1,2 @@
+/usr/bin/ar qc libome_parser.a CMakeFiles/ome_parser.dir/src/Acceptor.cpp.o CMakeFiles/ome_parser.dir/src/ClientManager.cpp.o CMakeFiles/ome_parser.dir/src/Ome.cpp.o CMakeFiles/ome_parser.dir/src/Reactor.cpp.o CMakeFiles/ome_parser.dir/src/Client.cpp.o CMakeFiles/ome_parser.dir/src/Epoll.cpp.o CMakeFiles/ome_parser.dir/src/Server.cpp.o
+/usr/bin/ranlib libome_parser.a

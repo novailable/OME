@@ -18,14 +18,16 @@ class Client : public IPollable
         sockaddr_in    _addr{};
         ClientManager  *_manager;
         
-
+        
         std::string _buffer;
-        std::unordered_map<
 
     public:
         Client(int fd, sockaddr_in addr, ClientManager *manager);
         ~Client();
         void    handle(uint32_t events);
         void    cleanup();
-        int fd() const;        
+        int fd() const;
+
+        std::string_view    data() const;
+        void    remove(size_t n);
 };

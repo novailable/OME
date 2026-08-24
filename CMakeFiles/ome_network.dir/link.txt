@@ -1,0 +1,2 @@
+/usr/bin/ar qc libome_network.a CMakeFiles/ome_network.dir/src/Acceptor.cpp.o CMakeFiles/ome_network.dir/src/ClientManager.cpp.o CMakeFiles/ome_network.dir/src/Ome.cpp.o CMakeFiles/ome_network.dir/src/Reactor.cpp.o CMakeFiles/ome_network.dir/src/Client.cpp.o CMakeFiles/ome_network.dir/src/Epoll.cpp.o CMakeFiles/ome_network.dir/src/Parser.cpp.o CMakeFiles/ome_network.dir/src/Server.cpp.o
+/usr/bin/ranlib libome_network.a
