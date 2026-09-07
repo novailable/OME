@@ -11,7 +11,7 @@ add_library(ome_parser
     src/Reactor.cpp
     src/Client.cpp
     src/Epoll.cpp
-    # src/Parser.cpp
+    src/Parser.cpp
     src/Server.cpp)
 
 target_include_directories(ome_parser PUBLIC include/ome)

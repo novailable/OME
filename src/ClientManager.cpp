@@ -23,10 +23,14 @@ void    ClientManager::remove(int fd)
     _reactor->del(it->second.get());
     _clients.erase(it);
     std::cout << "[manager]\tclient removed\t\t| socket:" << fd << std::endl;
-
 }
 
 void    ClientManager::set_reactor(Reactor& reactor)
 {
     _reactor = &reactor;
 }
+
+// void    ClientManager::add_message(const chars)
+// {
+    
+// }

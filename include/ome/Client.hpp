@@ -6,6 +6,7 @@
 
 #include "Fd.h"
 #include "IPollable.hpp"
+#include "Parser.hpp"
 
 class ClientManager;
 

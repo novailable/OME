@@ -1,30 +1,25 @@
 #pragma once
-#include <vector>
+
+#include <unordered_map>
+#include <string>
 #include <string_view>
-#include <optional>
-#include <cstdint>
-// #include "NewOrderRequest.h"
+#include <charconv>
+#include <iostream>
 
-class Parser {
-public:
-    void feed(const char* data, size_t len);
+class   Parser
+{
+    private:
+        static constexpr    char SOH = '\x01';
+        int _body_len = 0;
+        bool    _valid = false;
+        std::unordered_map<int, std::string>    _fields;
+    public:
+        Parser(std::string_view raw);
+        [[nodiscard]]
+        bool    has(int tag) const;
 
-    // Parses as many complete messages as are available, moving each
-    // directly into the returned vector. No intermediate map, no per-byte copy.
-    std::vector<NewOrderRequest> extractOrders();
-
-    void reset();
-
-private:
-    std::vector<char> buffer_;
-    size_t read_pos_ = 0; // where unconsumed data starts
-
-    static constexpr char SOH = '\x01';
-
-    // View-only scan — no copying, no allocation, just pointers into buffer_.
-    std::optional<size_t> tryFindCompleteMessage(std::string_view view) const;
-
-    NewOrderRequest parseOrder(std::string_view msg) const;
-
-    void compactIfNeeded();
+        bool    get_header(std::string_view raw, size_t &start);
+        bool    valid() const;
+        bool    validation(int tag, std::string_view value);
+        void    view_fileds() const;
 };
