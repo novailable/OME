@@ -1,4 +1,0 @@
-/Users/novailable/Developments/OME/build/CMakeFiles/ome_parser.dir
-/Users/novailable/Developments/OME/build/CMakeFiles/ome.dir
-/Users/novailable/Developments/OME/build/CMakeFiles/edit_cache.dir
-/Users/novailable/Developments/OME/build/CMakeFiles/rebuild_cache.dir

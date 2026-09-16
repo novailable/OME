@@ -1,4 +1,0 @@
-/home/aoo/OME/CMakeFiles/ome_parser.dir
-/home/aoo/OME/CMakeFiles/ome.dir
-/home/aoo/OME/CMakeFiles/edit_cache.dir
-/home/aoo/OME/CMakeFiles/rebuild_cache.dir
