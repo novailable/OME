@@ -13,7 +13,7 @@ Reactor::~Reactor()
     stop();
 }
 
-void    Reactor::add(IPollable* poll_obj, uint32_t events)
+void    Reactor::add(IPollable* poll_obj, PollFlags events)
 {
     _poller.add_fd(poll_obj, events);
 }
@@ -27,12 +27,10 @@ void Reactor::run()
 {
     _running = true;
 
-    epoll_event events[1024]{};
-
-
+	Events	ready{};
     while (_running)
     {
-        int hits = _poller.wait(events, 1024, 1000);
+        int hits = _poller.wait(ready, 1000);
         if (hits < 0)
         {
             if (errno == EINTR)
@@ -42,13 +40,9 @@ void Reactor::run()
         }
         for (int i = 0; i < hits; ++i)
         {
-            IPollable* obj =
-                static_cast<IPollable*>(events[i].data.ptr);
-
-            if (!obj)
+            if (!ready[i].obj)
                 continue;
-
-            obj->handle(events[i].events);        
+            ready[i].obj->handle(ready[i].flags);        
         }
         // Handle timeout objects
         // _poller.objs_timeout();

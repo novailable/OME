@@ -22,29 +22,49 @@ Epoll::~Epoll()
 	// }
 }
 
-Epoll&	Epoll::instance()
-{
-	static Epoll	inst;
-	return (inst);
-}
+// Epoll&	Epoll::instance()
+// {
+// 	static Epoll	inst;
+// 	return (inst);
+// }
 
 int	Epoll::init()
 {
+	
 	_fd = epoll_create1(EPOLL_CLOEXEC);
 	if (_fd < 0)
 		throw_("epoll creation failed!");
 	return (0);
 }
 
-int	Epoll::add_fd(IPollable* poll_obj, uint32_t events)
+uint32_t	Epoll::flags(PollFlags flags)
+{
+	return ((flags & READ ? EPOLLIN : 0)
+			| (flags & WRITE ? EPOLLOUT : 0)
+			| (flags & ERR ? EPOLLERR : 0)
+			| (flags & HUP ? EPOLLHUP : 0))
+			| (flags & EDGE ? EPOLLLET : 0);
+}
+
+Pollflag	Epoll::flags(uint32_t events)
+{
+	return (static_cast<PollFlags>
+			((events & EPOLLIN  ? READ  : 0)
+        	| (events & EPOLLOUT ? WRITE : 0)
+			| (events & EPOLLERR ? ERROR : 0)
+			| (events & EPOLLHUP ? POLL_HUP : 0)));
+}
+
+int	Epoll::add_fd(IPollable* poll_obj, PollFlags events)
 {
 	if (_fd < 0)
 		throw_("No epoll object is found!");
-	int	obj_fd = poll_obj->fd();
+
 	struct epoll_event	ev{};
-	ev.events = events;
+	ev.events = flags(events);
 	ev.data.ptr = poll_obj;
-	int status = epoll_ctl(_fd, EPOLL_CTL_ADD, obj_fd, &ev);
+
+	int status = epoll_ctl(_fd, EPOLL_CTL_ADD, poll_obj->fd(), &ev);
 	if (status < 0)
 		throw_("epoll_ctl ADD failed!");
 	// _objs[obj_fd] = poll_obj;
@@ -52,12 +72,12 @@ int	Epoll::add_fd(IPollable* poll_obj, uint32_t events)
 	return (status);
 }
 
-int Epoll::mod_fd(IPollable* poll_obj, uint32_t events)
+int Epoll::mod_fd(IPollable* poll_obj, PollFlags events)
 {
 	if (_fd < 0)
 		throw_("No epoll object is found!");
 	struct epoll_event	ev{};
-	ev.events = events;
+	ev.events = flags(events);
 	ev.data.ptr = poll_obj;
 	int status = epoll_ctl(_fd, EPOLL_CTL_MOD, poll_obj->fd(), &ev);
 	if (status < 0)
@@ -74,12 +94,20 @@ int Epoll::del_fd(IPollable* poll_obj)
     return (status);
 }
 
-int Epoll::wait(struct epoll_event *events, int maxevents, int timeout)
+int Epoll::wait(Events &ready, int timeout)
 {
 	if (_fd < 0)
 		return (-1);
-	return (epoll_wait(_fd, events, maxevents, timeout));
+	static struct epoll_event raw[1024]{};
+	int hits = epoll_wait(_fd, raw, MAX_EVENTS, timeout);
+	for(int i = 0; i < hits; ++i)
+	{
+		ready[i] = {static_cast<IPollable*>(raw[i].data.ptr), flags(raw[i].events)};
+	}
+	return (hits);
 }
+
+
 
 // void Epoll::objs_timeout()
 // {

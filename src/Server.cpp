@@ -5,7 +5,7 @@ Server::Server()
     std::string ip = "127.0.0.1", port = "8080";
     _acceptor.create_socket(ip, port);
     std::cout << "Server - " << ip << ":" << port << std::endl; 
-    _reactor.add(&_acceptor, EPOLLIN | EPOLLET);
+    _reactor.add(&_acceptor, READ | EDGE);
     std::cout << "Server is added to epoll" << std::endl;
 }
 

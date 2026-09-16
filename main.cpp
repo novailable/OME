@@ -13,7 +13,7 @@ int	main()
         "40=2\x01" "44=15\x01" "58=PHLX EQUITY TESTING\x01" "59=0\x01" "47=C\x01"
         "32=0\x01" "31=0\x01" "151=15\x01" "14=0\x01" "6=0\x01" "10=128\x01";	
     Ome ome;
-    // ome.run();
+    ome.run();
     ome.test_parser(msg);
     
     // std::cout << parser[8] << std::endl;

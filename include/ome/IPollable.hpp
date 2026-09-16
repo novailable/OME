@@ -1,9 +1,6 @@
 #ifndef IPOLLABLE_HPP
 #define IPOLLABLE_HPP
 
-#include "Utils.hpp"
-#include "Fd.h"
-
 struct	IPollable
 {
 	virtual	~IPollable() {};

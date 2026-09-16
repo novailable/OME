@@ -72,7 +72,7 @@ void    Acceptor::handle(uint32_t events)
 {
     int client_fd = -1;
 
-    if (!(events & EPOLLIN))
+    if (!(events & READ))
         return ;
     while(true)
     {

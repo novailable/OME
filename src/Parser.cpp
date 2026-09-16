@@ -1,6 +1,5 @@
 #include "Parser.hpp"
 
-
 bool    extract(std::string_view item, int &tag, std::string_view &value)
 {
     size_t  eq_pos = item.find('=');

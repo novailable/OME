@@ -4,11 +4,9 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <errno.h>
-#include <set>
-#include <vector>
-#include <map>
 
 #include "Fd.h"
+#include "Polltypes.hpp"
 #include "IPollable.hpp"
 
 struct IPollable; // forward
@@ -17,20 +15,21 @@ struct Epoll
 {
 	private: 
 		Fd	_fd;
+		static uint32_t		flags(PollFlags flags);
+		static PollFlags	flags(uint32_t events);
+
 	public:
 		Epoll();
 		~Epoll();
-		static Epoll& instance();
+		// static Epoll& instance();
 
 		int init();
 
-		operator	Fd() const;
-
-		int add_fd(IPollable* poll_obj,uint32_t events);
-		int mod_fd(IPollable* poll_obj, uint32_t events);
+		int add_fd(IPollable* poll_obj,PollFlags events);
+		int mod_fd(IPollable* poll_obj, PollFlags events);
 		int del_fd(IPollable* poll_obj);
 
-		int wait(struct epoll_event *events, int maxevents, int timeout);
+		int wait(Events &ready, int timeout);
 		// void	objs_timeout();
 
 		int	fd() const;

@@ -1,17 +1,23 @@
 #pragma once
 
-#include "Epoll.hpp"
+#if defined(__linux__)
+	#include "Epoll.hpp"
+	using PlatformPoller = Epoll;
+#elif defined(__APPLE__)
+	#include "Kqueue.hpp"
+	using PlatformPoller = Kqueue;
+#endif
+
 #include "IPollable.hpp"
 #include "Utils.hpp"
 
-#include <sys/epoll.h>
 #include <queue>
 #include <atomic>
 
 class Reactor
 {
 private:
-    Epoll              _poller;
+    PlatformPoller		_poller;
     std::atomic<bool>   _running;
 
 public:
@@ -19,7 +25,7 @@ public:
     ~Reactor();
 
     void run();
-    void add(IPollable* poll_obj, uint32_t events);
+    void add(IPollable* poll_obj, PollFlags events);
     void del(IPollable* poll_obj);
     void stop();
 };
