@@ -43,16 +43,16 @@ uint32_t	Epoll::flags(PollFlags flags)
 			| (flags & WRITE ? EPOLLOUT : 0)
 			| (flags & ERR ? EPOLLERR : 0)
 			| (flags & HUP ? EPOLLHUP : 0))
-			| (flags & EDGE ? EPOLLLET : 0);
+			| (flags & EDGE ? EPOLLET : 0);
 }
 
-Pollflag	Epoll::flags(uint32_t events)
+PollFlags	Epoll::flags(uint32_t events)
 {
 	return (static_cast<PollFlags>
 			((events & EPOLLIN  ? READ  : 0)
         	| (events & EPOLLOUT ? WRITE : 0)
-			| (events & EPOLLERR ? ERROR : 0)
-			| (events & EPOLLHUP ? POLL_HUP : 0)));
+			| (events & EPOLLERR ? ERR : 0)
+			| (events & EPOLLHUP ? HUP : 0)));
 }
 
 int	Epoll::add_fd(IPollable* poll_obj, PollFlags events)
