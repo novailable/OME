@@ -44,7 +44,7 @@ void    Client::handle(uint32_t events)
         return ;
     }
     // Parser  parser
-    std::cout << _buffer << std::endl;
+    Parser parser(_buffer);
 }
 
 void    Client::cleanup()
