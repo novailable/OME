@@ -285,6 +285,57 @@ class Order
 };
 #pragma once
 #pragma once
+
+#include <unordered_map>
+#include <string>
+#include <initializer_list>
+#include <cstdint>
+#include <string_view>
+#include <charconv>
+#include <iostream>
+
+enum struct ErrCode : uint8_t
+{
+    None,
+    BadCheckSum,
+    BadBodyLength,
+    MissingRequiredTag,
+    UnknownMsgType,
+    MalformedField,
+    InvalidEnum
+};
+
+inline thread_local ErrCode parser_errno = ErrCode::None;
+
+class   Parser
+{
+    private:
+        static constexpr    char SOH = '\x01';
+        size_t _body_len = 0;
+        bool    _valid = false;
+        std::unordered_map<int, std::string_view>    _fields;
+        bool    extract(std::string_view item, int &tag, std::string_view &value);
+        bool    checksum(std::string_view raw, size_t start);
+        bool    tagcheck(std::initializer_list<int> tags);
+        bool    bodytag();
+        bool    fieldformats();
+
+        template <typename T>
+        bool    num_format(T &num, std::string_view n, size_t size = std::string_view::npos)
+        {
+            size = (size == std::string_view::npos) ? n.size() : size;
+            std::from_chars_result result = std::from_chars(n.data(), n.data() + size, num);
+            return (result.ec == std::errc{} && result.ptr == n.data() + size);
+        }
+
+    public:
+        Parser(std::string_view raw);
+        [[nodiscard]]
+        bool    get_header(std::string_view raw, size_t &start);
+        bool    valid() const;
+        void    view_fileds() const;
+};
+#pragma once
 #include <vector>
 #include <string_view>
 #include <optional>
@@ -314,31 +365,6 @@ private:
 
     void compactIfNeeded();
 };#pragma once
-
-#include <unordered_map>
-#include <string>
-#include <string_view>
-#include <charconv>
-#include <iostream>
-
-class   Parser
-{
-    private:
-        static constexpr    char SOH = '\x01';
-        int _body_len = 0;
-        bool    _valid = false;
-        std::unordered_map<int, std::string>    _fields;
-    public:
-        Parser(std::string_view raw);
-        [[nodiscard]]
-        bool    has(int tag) const;
-
-        bool    get_header(std::string_view raw, size_t &start);
-        bool    valid() const;
-        bool    validation(int tag, std::string_view value);
-        void    view_fileds() const;
-};
-#pragma once
 
 #include <cstdint>
 #include <array>
@@ -567,7 +593,7 @@ void    Client::handle(uint32_t events)
         return ;
     }
     // Parser  parser
-    std::cout << _buffer << std::endl;
+    Parser parser(_buffer);
 }
 
 void    Client::cleanup()
@@ -663,16 +689,16 @@ uint32_t	Epoll::flags(PollFlags flags)
 			| (flags & WRITE ? EPOLLOUT : 0)
 			| (flags & ERR ? EPOLLERR : 0)
 			| (flags & HUP ? EPOLLHUP : 0))
-			| (flags & EDGE ? EPOLLLET : 0);
+			| (flags & EDGE ? EPOLLET : 0);
 }
 
-Pollflag	Epoll::flags(uint32_t events)
+PollFlags	Epoll::flags(uint32_t events)
 {
 	return (static_cast<PollFlags>
 			((events & EPOLLIN  ? READ  : 0)
         	| (events & EPOLLOUT ? WRITE : 0)
-			| (events & EPOLLERR ? ERROR : 0)
-			| (events & EPOLLHUP ? POLL_HUP : 0)));
+			| (events & EPOLLERR ? ERR : 0)
+			| (events & EPOLLHUP ? HUP : 0)));
 }
 
 int	Epoll::add_fd(IPollable* poll_obj, PollFlags events)
@@ -841,7 +867,204 @@ void    Ome::test_parser(std::string &msg)
 {
     Parser  parser(msg);
     parser.view_fileds();
-}// #include "Parser.hpp"
+    std::cout << parser.valid() << std::endl;
+}#include "Parser.hpp"
+
+bool    Parser::extract(std::string_view item, int &tag, std::string_view &value)
+{
+    size_t  eq_pos = item.find('=');
+
+    if (eq_pos == std::string_view::npos)
+        return (false);
+    if (!num_format(tag, item, eq_pos))
+        return (false);
+
+    value = item.substr(eq_pos + 1);
+    return (true);
+}
+
+bool    Parser::tagcheck(std::initializer_list<int> tags)
+{
+    for (int tag : tags)
+    {
+        if (_fields.find(tag) == _fields.end())
+        {
+            parser_errno = ErrCode::MissingRequiredTag;
+            return (false);
+        }
+    }
+    return (true);
+}
+
+Parser::Parser(std::string_view raw)
+{
+    size_t  start = 0, pos;
+
+    if (!get_header(raw, start))
+        return;
+
+    if (start + static_cast<size_t>(_body_len) > raw.size())
+    {
+        parser_errno = ErrCode::BadBodyLength;
+        return;
+    }
+
+    std::string_view body = raw.substr(start, _body_len);
+    size_t bstart = 0, bpos;
+
+    while ((bpos = body.find(SOH, bstart)) != std::string_view::npos)
+    {
+        int tag;
+        std::string_view item(body.data() + bstart, bpos - bstart), value;
+        if (extract(item, tag, value))
+            _fields[tag] = value;
+        bstart = bpos + 1;
+    }
+
+    start += _body_len;
+
+    if (!checksum(raw, start))
+        return ;
+    if (!tagcheck({35, 34, 49, 56}))
+        return ;
+    if (!bodytag())
+        return ;
+    if (!fieldformats())
+        return ;
+    _valid = true;
+}
+
+bool    Parser::get_header(std::string_view raw, size_t &start)
+{
+    size_t pos;
+    int tag;
+    std::string_view    value;
+
+    if ((pos = raw.find(SOH, start)) == std::string_view::npos)
+        return (false);
+    if ((!extract(raw.substr(start, pos - start), tag, value) || tag != 8))
+        return (false);
+    _fields[8] = value;
+    start = pos + 1;
+
+    if ((pos = raw.find(SOH, start)) == std::string_view::npos)
+        return (false);
+    if (!extract(raw.substr(start, pos - start), tag, value) || tag != 9)
+        return (false);
+    _fields[9] = value;
+    start = pos + 1;
+
+    if (!num_format(_body_len, value) || _body_len == 0)
+        return (false);
+    return (true);
+}
+
+bool    Parser::fieldformats()
+{
+    std::unordered_map<int, std::string_view>
+    ::iterator  side = _fields.find(54);
+    if (side != _fields.end())
+    {
+        if (side->second.size() != 1 || (side->second[0] != '1' && side->second[0] != '2'))
+        {
+            parser_errno = ErrCode::InvalidEnum;
+            return (false);
+        }
+    }
+
+    std::unordered_map<int, std::string_view>
+    ::iterator  qty = _fields.find(38);
+    if (qty != _fields.end())
+    {
+        double  qty_value;
+        if (!num_format(qty_value, qty->second) || qty_value <= 0)
+        {
+            parser_errno = ErrCode::MalformedField;
+            return (false);
+        }
+    }
+
+    std::unordered_map<int, std::string_view>
+    ::iterator  price = _fields.find(44);
+    if (price != _fields.end())
+    {
+        double  price_value;
+        if (!num_format(price_value, price->second) || price_value <= 0)
+            return (parser_errno = ErrCode::MalformedField, false);
+    }
+    return (true);
+}
+
+bool    Parser::checksum(std::string_view raw, size_t start)
+{
+    size_t  pos = raw.find(SOH, start);
+    if (pos == std::string_view::npos)
+        return(parser_errno = ErrCode::BadBodyLength, false);
+
+    int tag;
+    std::string_view value;
+    if (!extract(raw.substr(start, pos - start), tag, value) || tag != 10)
+        return(parser_errno = ErrCode::BadBodyLength, false);
+    _fields[10] = value;
+
+    int check_sum;
+    if (!num_format(check_sum, value))
+	{
+		parser_errno = ErrCode::BadCheckSum;
+		return (false);
+	}
+
+    unsigned int sum = 0;
+    for (unsigned char c : raw.substr(0, start))
+        sum += c;
+    if (static_cast<uint8_t>(sum % 256) != check_sum)
+    {
+        parser_errno = ErrCode::BadCheckSum;
+        return (false);
+    }
+    return (true);
+}
+
+bool    Parser::bodytag()
+{
+    std::unordered_map<int, std::string_view>
+    ::iterator  typeIt = _fields.find(35);
+
+    if (typeIt == _fields.end())
+    {
+        parser_errno = ErrCode::MissingRequiredTag;
+        return (false);
+    }
+    const std::string_view  &type = typeIt->second;
+    if (type == "D")
+    {
+        if (!tagcheck({11, 55, 54, 38, 40}))
+            return (false);
+        if (_fields[40] == "2" && _fields.find(44) == _fields.end())
+        {
+            parser_errno = ErrCode::MissingRequiredTag;
+            return (false);
+        }
+        return (true);
+    }
+
+    parser_errno = ErrCode::UnknownMsgType;
+    return (false);
+}
+
+void    Parser::view_fileds() const
+{
+    for (const auto& [key, value] : _fields)
+    {
+        std::cout << key << "\t|\t" << value << std::endl;
+    }
+}
+
+bool    Parser::valid() const
+{
+    return (_valid);
+}
+// #include "Parser.hpp"
 
 // Parser::Parser(std::string msg) : _raw(std::move(msg))
 // {
@@ -993,110 +1216,6 @@ NewOrderRequest Parser::parseOrder(std::string_view msg) const {
         pos = soh + 1;
     }
     return req; // NRVO / move, no copy on return
-}#include "Parser.hpp"
-
-bool    extract(std::string_view item, int &tag, std::string_view &value)
-{
-    size_t  eq_pos = item.find('=');
-    if (eq_pos != std::string_view::npos)
-    {
-        std::from_chars_result result = std::from_chars(item.data(), item.data() + eq_pos, tag);
-        if (result.ec != std::errc{} || result.ptr != item.data() + eq_pos)
-            return (false);
-        value = item.substr(eq_pos + 1);
-        return (true);
-    }
-    return (false);
-}
-
-bool    Parser::get_header(std::string_view raw, size_t &start)
-{
-    size_t pos;
-    int tag;
-    std::string_view    value;
-
-    if ((pos = raw.find(SOH, start)) == std::string_view::npos)
-        return (false);
-    if ((!extract(raw.substr(start, pos - start), tag, value) || tag != 8))
-        return (false);
-    _fields[8] = value;
-    start = pos + 1;
-
-    if ((pos = raw.find(SOH, start)) == std::string_view::npos)
-        return (false);
-    if (!extract(raw.substr(start, pos - start), tag, value) || tag != 9)
-        return (false);
-    _fields[9] = value;
-    start = pos + 1;
-
-    std::from_chars_result result = std::from_chars(value.data(), value.data() + value.size(), _body_len);
-    if (result.ec != std::errc{} || _body_len < 0)
-        return (false);
-    return (true);
-}
-
-Parser::Parser(std::string_view raw)
-{
-    size_t  start = 0, pos;
-
-    if (!get_header(raw, start))
-        return;
-
-    if (start + _body_len > raw.size())
-        return; // declared body longer than what we actually have
-
-    std::string_view body = raw.substr(start, _body_len);
-    size_t bstart = 0, bpos;
-
-    while ((bpos = body.find(SOH, bstart)) != std::string_view::npos)
-    {
-        int tag;
-        std::string_view item(body.data() + bstart, bpos - bstart), value;
-        if (extract(item, tag, value))
-            _fields[tag] = value;
-        bstart = bpos + 1;
-    }
-
-    start += _body_len;
-    if ((pos = raw.find(SOH, start)) == std::string_view::npos)
-        return;
-
-    int tag;
-    std::string_view value;
-    if (!extract(raw.substr(start, pos - start), tag, value) || tag != 10)
-        return;
-
-    _fields[10] = value;
-    _valid = true;
-}
-
-void    Parser::view_fileds() const
-{
-    for (const auto& [key, value] : _fields)
-    {
-        std::cout << key << "|" << value << std::endl;
-    }
-}
-
-// namespace{
-//     bool    check_head()
-//     {
-//         if (tag_ )
-//     }
-// }
-
-// bool    valid
-
-bool    Parser::validation(int tag, std::string_view value)
-{
-    if (_fields.size() == 0 && tag != 8)
-        return (false);
-    return (true);
-}
-
-bool    Parser::valid() const
-{
-    return (_valid);
 }#include "Reactor.hpp"
 #include "Utils.hpp"
 
@@ -1168,45 +1287,24 @@ void    Server::run()
     _c_manager.set_reactor(_reactor);
     _acceptor.set_c_manager(_c_manager);
     _reactor.run();
-}cmake_minimum_required(VERSION 3.10)
-project(OME VERSION 1.0 LANGUAGES CXX)
+}// #include "Parser.hpp"
+#include "Server.hpp"
+#include "Reactor.hpp"
+#include "Ome.hpp"
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+int	main()
+{
+    std::string ip = "127.0.0.1", port = "8080";
+    std::string msg =
+        "8=FIX.4.2\x01" "9=124\x01" "35=8\x01" "49=PHLX\x01" "56=PERS\x01"
+        "52=20071123-05:30:00.000\x01" "11=ATOMNOCCC9990900\x01" "20=3\x01"
+        "150=E\x01" "39=E\x01" "55=MSFT\x01" "167=CS\x01" "54=1\x01" "38=15\x01"
+        "40=2\x01" "44=15\x01" "58=PHLX EQUITY TESTING\x01" "59=0\x01" "47=C\x01"
+        "32=0\x01" "31=0\x01" "151=15\x01" "14=0\x01" "6=0\x01" "10=128\x01";	
+    Ome ome;
+    // ome.run();
+    ome.test_parser(msg);
 
-set(OME_SOURCES
-    src/Acceptor.cpp
-    src/ClientManager.cpp
-    src/Ome.cpp
-    src/Reactor.cpp
-    src/Client.cpp
-    src/Parser.cpp
-    src/Server.cpp)
-
-if (APPLE)
-    list(APPEND OME_SOURCES src/Kqueue.cpp)
-else()
-    list(APPEND OME_SOURCES src/Epoll.cpp)
-endif()
-
-add_library(ome_parser ${OME_SOURCES})
-
-target_include_directories(ome_parser PUBLIC include/ome)
-
-add_executable(ome main.cpp)
-target_link_libraries(ome PRIVATE ome_parser)
-
-# # Tests
-
-# find_package(GTest REQUIRED)
-
-# add_executable(tester
-#     tester.cpp)
-
-# target_link_libraries(tester
-# PRIVATE
-#     ome_parser
-#     GTest::gtest_main)
-
-# include(GoogleTest)
-# gtest_discover_tests(tester)
+    // std::cout << parser[8] << std::endl;
+	std::cout << "Cmake is working" << std::endl;
+}

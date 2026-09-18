@@ -14,4 +14,5 @@ void    Ome::test_parser(std::string &msg)
 {
     Parser  parser(msg);
     parser.view_fileds();
+    std::cout << parser.valid() << std::endl;
 }
