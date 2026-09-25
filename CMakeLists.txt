@@ -11,7 +11,8 @@ set(OME_SOURCES
     src/Reactor.cpp
     src/Client.cpp
     src/Parser.cpp
-    src/Server.cpp)
+    src/Server.cpp
+    src/test/parser_test.cpp)
 
 if (APPLE)
     list(APPEND OME_SOURCES src/Kqueue.cpp)

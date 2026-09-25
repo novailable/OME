@@ -10,5 +10,5 @@ class   Ome
         Ome();
         ~Ome();
         void    run();
-        void    test_parser(std::string&);
+        void    test_parser();
 };
