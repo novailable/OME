@@ -179,7 +179,34 @@ class Fd
 
         operator int() const {return _fd;}
 };
-#ifndef IPOLLABLE_HPP
+#pragma once
+
+#include <string_view>
+
+class FixField
+{
+    public:
+        int tag() const;
+        std::string_view value() const;
+};
+
+class FixGroup
+{
+    private:
+        std::vector<FixField>   _fields;
+    public:
+        FixField get(int tag) const;
+        FixGroup group(int countTag, size_t index) const;
+};
+
+class FixMessage
+{
+    private:
+        std::vector<Fix
+    public:
+        FixField get(int tag) const;
+        FixGroup group(int countTag, size_t index) const;
+};#ifndef IPOLLABLE_HPP
 #define IPOLLABLE_HPP
 
 struct	IPollable
@@ -231,7 +258,7 @@ class   Ome
         Ome();
         ~Ome();
         void    run();
-        void    test_parser(std::string&);
+        void    test_parser();
 };
 enum struct Side : uint8_t {
     Buy,
@@ -286,7 +313,7 @@ class Order
 #pragma once
 #pragma once
 
-#include <unordered_map>
+#include <vector>
 #include <string>
 #include <initializer_list>
 #include <cstdint>
@@ -294,16 +321,43 @@ class Order
 #include <charconv>
 #include <iostream>
 
+// FIX.4.2
+
+constexpr uint8_t   T34 = 1 << 0;
+constexpr uint8_t   T35 = 1 << 1;
+constexpr uint8_t   T49 = 1 << 2;
+constexpr uint8_t   T56 = 1 << 3;
+constexpr uint8_t   T52 = 1 << 4;
+
+struct  Field
+{
+    int tag;
+    std::string_view    value;
+};
+
 enum struct ErrCode : uint8_t
 {
     None,
     BadCheckSum,
     BadBodyLength,
     MissingRequiredTag,
+    DuplicateTag,
     UnknownMsgType,
     MalformedField,
     InvalidEnum
 };
+
+// std::iostream std::operator<<(std::ostream &out, ErrCode parser_errno)
+// {
+//     std::string output;
+
+//     switch(parser_errno)
+//     {
+//         case ErrCode::None : "Nth wrong"; break;
+//         case ErrCode::BadCheckSum : "Bad Check Sum" ; break;
+//         case ErrCode::
+//     }
+// }
 
 inline thread_local ErrCode parser_errno = ErrCode::None;
 
@@ -311,14 +365,17 @@ class   Parser
 {
     private:
         static constexpr    char SOH = '\x01';
+        uint8_t _tag_check = 0;
         size_t _body_len = 0;
         bool    _valid = false;
-        std::unordered_map<int, std::string_view>    _fields;
+        std::vector<Field>    _fields;
+
         bool    extract(std::string_view item, int &tag, std::string_view &value);
         bool    checksum(std::string_view raw, size_t start);
-        bool    tagcheck(std::initializer_list<int> tags);
-        bool    bodytag();
-        bool    fieldformats();
+        bool    requiredtag(int tag);
+        bool    tagcheck(unsigned tags);
+        // bool    bodytag();
+        // bool    fieldformats();
 
         template <typename T>
         bool    num_format(T &num, std::string_view n, size_t size = std::string_view::npos)
@@ -332,39 +389,11 @@ class   Parser
         Parser(std::string_view raw);
         [[nodiscard]]
         bool    get_header(std::string_view raw, size_t &start);
+        std::string_view    get(int tag);
         bool    valid() const;
         void    view_fileds() const;
 };
 #pragma once
-#include <vector>
-#include <string_view>
-#include <optional>
-#include <cstdint>
-// #include "NewOrderRequest.h"
-
-class Parser {
-public:
-    void feed(const char* data, size_t len);
-
-    // Parses as many complete messages as are available, moving each
-    // directly into the returned vector. No intermediate map, no per-byte copy.
-    std::vector<NewOrderRequest> extractOrders();
-
-    void reset();
-
-private:
-    std::vector<char> buffer_;
-    size_t read_pos_ = 0; // where unconsumed data starts
-
-    static constexpr char SOH = '\x01';
-
-    // View-only scan — no copying, no allocation, just pointers into buffer_.
-    std::optional<size_t> tryFindCompleteMessage(std::string_view view) const;
-
-    NewOrderRequest parseOrder(std::string_view msg) const;
-
-    void compactIfNeeded();
-};#pragma once
 
 #include <cstdint>
 #include <array>
@@ -787,6 +816,8 @@ int	Epoll::fd() const
 {
 	return (_fd);
 }
+#include "FixMsg.hpp"
+
 #include "Kqueue.hpp"
 #include "IPollable.hpp"
 #include "Utils.hpp"
@@ -854,6 +885,9 @@ int Kqueue::wait(Events &ready, int timeout)
 int Kqueue::fd() const { return (_fd); }#include "Ome.hpp"
 #include "Parser.hpp"
 
+void run_all_tests();
+std::string sanitize_fix(std::string msg);
+
 Ome::Ome() : _server() {}
 
 Ome::~Ome() {}
@@ -863,9 +897,11 @@ void    Ome::run()
     _server.run();
 }
 
-void    Ome::test_parser(std::string &msg)
+void    Ome::test_parser()
 {
-    Parser  parser(msg);
+    std::string msg = "8=FIX.4.4|9=72|35=1|49=BuySide|56=SellSide|34=2|52=20190605-16:56:17.419|112=TestReqID|10=215|8=FIX.4.4|9=72|35=1|49=BuySide|";
+    Parser  parser(sanitize_fix(msg));
+    // run_all_tests();
     parser.view_fileds();
     std::cout << parser.valid() << std::endl;
 }#include "Parser.hpp"
@@ -876,22 +912,30 @@ bool    Parser::extract(std::string_view item, int &tag, std::string_view &value
 
     if (eq_pos == std::string_view::npos)
         return (false);
-    if (!num_format(tag, item, eq_pos))
+    if (!num_format(tag, item, eq_pos) || tag <= 0)
         return (false);
-
     value = item.substr(eq_pos + 1);
     return (true);
 }
 
-bool    Parser::tagcheck(std::initializer_list<int> tags)
+std::string_view    Parser::get(int tag)
 {
-    for (int tag : tags)
+    for (const Field& field : _fields)
     {
-        if (_fields.find(tag) == _fields.end())
-        {
-            parser_errno = ErrCode::MissingRequiredTag;
-            return (false);
-        }
+        if (field.tag == tag)
+            return (field.value);
+    }
+    return {};
+}
+
+bool    Parser::tagcheck(unsigned tags)
+{
+    _tag_check = tags & ~_tag_check;
+    if (_tag_check)
+    {
+    //     int tag = tags[std::count_zero(_tag_check)];
+        parser_errno = ErrCode::MissingRequiredTag;
+        return (false);
     }
     return (true);
 }
@@ -903,7 +947,7 @@ Parser::Parser(std::string_view raw)
     if (!get_header(raw, start))
         return;
 
-    if (start + static_cast<size_t>(_body_len) > raw.size())
+    if (_body_len <= 0 || start + static_cast<size_t>(_body_len) > raw.size())
     {
         parser_errno = ErrCode::BadBodyLength;
         return;
@@ -916,22 +960,52 @@ Parser::Parser(std::string_view raw)
     {
         int tag;
         std::string_view item(body.data() + bstart, bpos - bstart), value;
-        if (extract(item, tag, value))
-            _fields[tag] = value;
+        if (!extract(item, tag, value))
+        {
+            parser_errno = ErrCode::MalformedField;
+            return ;
+        }
+        if (!requiredtag(tag))
+            return ;
+        _fields.push_back({tag, value});
         bstart = bpos + 1;
     }
 
     start += _body_len;
-
     if (!checksum(raw, start))
         return ;
-    if (!tagcheck({35, 34, 49, 56}))
+    if (!tagcheck(T34 | T35 | T49 | T52 | T56))
         return ;
-    if (!bodytag())
-        return ;
-    if (!fieldformats())
-        return ;
+    // if (!bodytag())
+    //     return ;
+    // if (!fieldformats())
+    //     return ;
     _valid = true;
+}
+
+bool    Parser::requiredtag(int tag)
+{
+    uint8_t bit = 0;
+
+    switch (tag)
+    {
+        case 34: bit = T34; break;
+        case 35: bit = T35; break;
+        case 49: bit = T49; break;
+        case 56: bit = T56; break;
+        case 52: bit = T52; break;
+        default:
+            return (true);
+    }
+
+    if (_tag_check & bit)
+    {
+        parser_errno = ErrCode::DuplicateTag;
+        return (false);
+    }
+
+    _tag_check |= bit;
+    return (true);
 }
 
 bool    Parser::get_header(std::string_view raw, size_t &start)
@@ -944,14 +1018,14 @@ bool    Parser::get_header(std::string_view raw, size_t &start)
         return (false);
     if ((!extract(raw.substr(start, pos - start), tag, value) || tag != 8))
         return (false);
-    _fields[8] = value;
+    // _fields.push_back({8, value});
     start = pos + 1;
 
     if ((pos = raw.find(SOH, start)) == std::string_view::npos)
         return (false);
     if (!extract(raw.substr(start, pos - start), tag, value) || tag != 9)
         return (false);
-    _fields[9] = value;
+    // _fields.push_back({9, value});
     start = pos + 1;
 
     if (!num_format(_body_len, value) || _body_len == 0)
@@ -959,41 +1033,35 @@ bool    Parser::get_header(std::string_view raw, size_t &start)
     return (true);
 }
 
-bool    Parser::fieldformats()
-{
-    std::unordered_map<int, std::string_view>
-    ::iterator  side = _fields.find(54);
-    if (side != _fields.end())
-    {
-        if (side->second.size() != 1 || (side->second[0] != '1' && side->second[0] != '2'))
-        {
-            parser_errno = ErrCode::InvalidEnum;
-            return (false);
-        }
-    }
+// bool    Parser::fieldformats()
+// {
+//     std::unordered_map<int, std::string_view>
+//     ::iterator  side = _fields.find(54);
+//     if (side != _fields.end())
+//     {
+//         if (side->second.size() != 1 || (side->second[0] != '1' && side->second[0] != '2'))
+//             return (parser_errno = ErrCode::InvalidEnum, false);
+//     }
 
-    std::unordered_map<int, std::string_view>
-    ::iterator  qty = _fields.find(38);
-    if (qty != _fields.end())
-    {
-        double  qty_value;
-        if (!num_format(qty_value, qty->second) || qty_value <= 0)
-        {
-            parser_errno = ErrCode::MalformedField;
-            return (false);
-        }
-    }
+//     std::unordered_map<int, std::string_view>
+//     ::iterator  qty = _fields.find(38);
+//     if (qty != _fields.end())
+//     {
+//         double  qty_value;
+//         if (!num_format(qty_value, qty->second) || qty_value <= 0)
+//             return (parser_errno = ErrCode::MalformedField, false);
+//     }
 
-    std::unordered_map<int, std::string_view>
-    ::iterator  price = _fields.find(44);
-    if (price != _fields.end())
-    {
-        double  price_value;
-        if (!num_format(price_value, price->second) || price_value <= 0)
-            return (parser_errno = ErrCode::MalformedField, false);
-    }
-    return (true);
-}
+//     std::unordered_map<int, std::string_view>
+//     ::iterator  price = _fields.find(44);
+//     if (price != _fields.end())
+//     {
+//         double  price_value;
+//         if (!num_format(price_value, price->second) || price_value <= 0)
+//             return (parser_errno = ErrCode::MalformedField, false);
+//     }
+//     return (true);
+// }
 
 bool    Parser::checksum(std::string_view raw, size_t start)
 {
@@ -1005,52 +1073,37 @@ bool    Parser::checksum(std::string_view raw, size_t start)
     std::string_view value;
     if (!extract(raw.substr(start, pos - start), tag, value) || tag != 10)
         return(parser_errno = ErrCode::BadBodyLength, false);
-    _fields[10] = value;
 
     int check_sum;
     if (!num_format(check_sum, value))
-	{
-		parser_errno = ErrCode::BadCheckSum;
-		return (false);
-	}
+		return (parser_errno = ErrCode::BadCheckSum, false);
 
     unsigned int sum = 0;
     for (unsigned char c : raw.substr(0, start))
         sum += c;
     if (static_cast<uint8_t>(sum % 256) != check_sum)
-    {
-        parser_errno = ErrCode::BadCheckSum;
-        return (false);
-    }
+        return (parser_errno = ErrCode::BadCheckSum, false);
     return (true);
 }
 
-bool    Parser::bodytag()
-{
-    std::unordered_map<int, std::string_view>
-    ::iterator  typeIt = _fields.find(35);
+// bool    Parser::bodytag()
+// {
+//     std::unordered_map<int, std::string_view>
+//     ::iterator  typeIt = _fields.find(35);
 
-    if (typeIt == _fields.end())
-    {
-        parser_errno = ErrCode::MissingRequiredTag;
-        return (false);
-    }
-    const std::string_view  &type = typeIt->second;
-    if (type == "D")
-    {
-        if (!tagcheck({11, 55, 54, 38, 40}))
-            return (false);
-        if (_fields[40] == "2" && _fields.find(44) == _fields.end())
-        {
-            parser_errno = ErrCode::MissingRequiredTag;
-            return (false);
-        }
-        return (true);
-    }
+//     if (typeIt == _fields.end())
+//         return (parser_errno = ErrCode::MissingRequiredTag, false);
 
-    parser_errno = ErrCode::UnknownMsgType;
-    return (false);
-}
+//     const std::string_view  &type = typeIt->second;
+//     if (type == "D")
+//     {
+//         if (!tagcheck({11, 55, 54, 38, 40}))
+//             return (false);
+//         if (_fields[40] == "2" && _fields.find(44) == _fields.end())
+//             return (parser_errno = ErrCode::MissingRequiredTag, false);
+//     }
+//     return (true);
+// }
 
 void    Parser::view_fileds() const
 {
@@ -1064,159 +1117,7 @@ bool    Parser::valid() const
 {
     return (_valid);
 }
-// #include "Parser.hpp"
-
-// Parser::Parser(std::string msg) : _raw(std::move(msg))
-// {
-// 	size_t	start = 0, pos;
-
-// 	while ((pos = _raw.find(DELIM, start)) != std::string_view::npos)
-// 	{
-// 		if (pos > start)
-// 		{
-// 			std::string_view	item(_raw.data() + start, pos - start);
-// 			size_t	eq = item.find(EQUAL);
-// 			if (eq != std::string_view::npos)
-// 			{
-// 				int tag; 
-// 				std::from_chars(item.data(), item.data() + eq, tag); 
-// 				_items[tag] = item.substr(eq + 1);
-// 			}
-// 		}
-// 		start = pos + 1;
-// 	}
-// }
-
-// std::optional<std::string_view>	Parser::get(int tag) const
-// {
-// 	std::map<int, std::string_view>::const_iterator	it = _items.find(tag);
-// 	if (it == _items.end())
-// 		return std::nullopt;
-// 	return it->second;
-// }
-
-// std::optional<std::string_view>	Parser::operator[](int tag) const
-// {
-// 	return get(tag);
-// }
-
-// void	Parser::print()
-// {
-// 	if (_items.empty())
-// 	{
-// 		std::cout << "nothing inside the parser" << std::endl;
-// 		return ;
-// 	}
-// 	for (std::map<int, std::string_view>::const_iterator it = _items.begin(); it != _items.end(); ++it)
-// 		std::cout << "tag: " << it->first << ", value: " << it->second << std::endl;
-// }
-
-// std::ostream	&operator<<(std::ostream& out, const std::optional<std::string_view>& data)
-// {
-// 	if (data.has_value())
-// 		out << *data;
-// 	else
-// 		out << "(null)";
-// 	return (out);
-// }
-
-#include "Parser.hpp"
-#include <charconv>
-
-void Parser::feed(const char* data, size_t len) {
-    buffer_.insert(buffer_.end(), data, data + len);
-}
-
-void Parser::reset() {
-    buffer_.clear();
-    read_pos_ = 0;
-}
-
-// Instead of erasing from the front every time, just advance read_pos_.
-// Only physically shift memory when the "used up" prefix gets large.
-void Parser::compactIfNeeded() {
-    constexpr size_t COMPACT_THRESHOLD = 4096;
-    if (read_pos_ > COMPACT_THRESHOLD) {
-        buffer_.erase(buffer_.begin(), buffer_.begin() + read_pos_);
-        read_pos_ = 0;
-    }
-}
-
-std::optional<size_t> Parser::tryFindCompleteMessage(std::string_view view) const {
-    size_t firstSoh = view.find(SOH);
-    if (firstSoh == std::string_view::npos) return std::nullopt;
-
-    size_t secondSoh = view.find(SOH, firstSoh + 1);
-    if (secondSoh == std::string_view::npos) return std::nullopt;
-
-    std::string_view tag9Field = view.substr(firstSoh + 1, secondSoh - firstSoh - 1);
-    size_t eq = tag9Field.find('=');
-    if (eq == std::string_view::npos || tag9Field.substr(0, eq) != "9") {
-        return std::nullopt; // malformed — caller decides how to handle
-    }
-
-    int bodyLength = 0;
-    auto valueView = tag9Field.substr(eq + 1);
-    std::from_chars(valueView.data(), valueView.data() + valueView.size(), bodyLength);
-
-    size_t headerLen = secondSoh + 1;
-    size_t checksumFieldLen = 7; // "10=" + 3 digits + SOH
-    size_t totalNeeded = headerLen + bodyLength + checksumFieldLen;
-
-    if (view.size() < totalNeeded) return std::nullopt; // incomplete, wait for more bytes
-
-    return totalNeeded;
-}
-
-std::vector<NewOrderRequest> Parser::extractOrders() {
-    std::vector<NewOrderRequest> orders;
-
-    while (true) {
-        std::string_view view(buffer_.data() + read_pos_, buffer_.size() - read_pos_);
-        auto msgLen = tryFindCompleteMessage(view);
-        if (!msgLen) break; // partial message — leave it, exactly like before
-
-        std::string_view completeMsg = view.substr(0, *msgLen);
-        orders.push_back(parseOrder(completeMsg)); // the ONE real copy: fields into the struct
-
-        read_pos_ += *msgLen;
-    }
-
-    compactIfNeeded();
-    return orders;
-}
-
-NewOrderRequest Parser::parseOrder(std::string_view msg) const {
-    NewOrderRequest req{};
-    size_t pos = 0;
-
-    while (pos < msg.size()) {
-        size_t soh = msg.find(SOH, pos);
-        if (soh == std::string_view::npos) break;
-
-        std::string_view field = msg.substr(pos, soh - pos);
-        size_t eq = field.find('=');
-        if (eq != std::string_view::npos) {
-            std::string_view tagStr = field.substr(0, eq);
-            std::string_view value  = field.substr(eq + 1);
-
-            int tag = 0;
-            std::from_chars(tagStr.data(), tagStr.data() + tagStr.size(), tag);
-
-            switch (tag) {
-                case 11: req.cl_ord_id = std::string(value); break; // small string, copy is fine
-                case 55: req.symbol    = std::string(value); break;
-                case 54: req.side      = (value == "1") ? Side::Buy : Side::Sell; break;
-                case 38: std::from_chars(value.data(), value.data() + value.size(), req.quantity); break;
-                case 44: /* parse price as fixed-point, see note below */ break;
-                case 40: req.type = (value == "1") ? OrderType::Market : OrderType::Limit; break;
-                default: break; // ignore tags you don't care about yet
-            }
-        }
-        pos = soh + 1;
-    }
-    return req; // NRVO / move, no copy on return
-}#include "Reactor.hpp"
+#include "Reactor.hpp"
 #include "Utils.hpp"
 
 Reactor::Reactor() : _running(false)
@@ -1287,24 +1188,115 @@ void    Server::run()
     _c_manager.set_reactor(_reactor);
     _acceptor.set_c_manager(_c_manager);
     _reactor.run();
-}// #include "Parser.hpp"
-#include "Server.hpp"
-#include "Reactor.hpp"
-#include "Ome.hpp"
+}#include <iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include "Parser.hpp"
 
-int	main()
-{
-    std::string ip = "127.0.0.1", port = "8080";
-    std::string msg =
-        "8=FIX.4.2\x01" "9=124\x01" "35=8\x01" "49=PHLX\x01" "56=PERS\x01"
-        "52=20071123-05:30:00.000\x01" "11=ATOMNOCCC9990900\x01" "20=3\x01"
-        "150=E\x01" "39=E\x01" "55=MSFT\x01" "167=CS\x01" "54=1\x01" "38=15\x01"
-        "40=2\x01" "44=15\x01" "58=PHLX EQUITY TESTING\x01" "59=0\x01" "47=C\x01"
-        "32=0\x01" "31=0\x01" "151=15\x01" "14=0\x01" "6=0\x01" "10=128\x01";	
-    Ome ome;
-    // ome.run();
-    ome.test_parser(msg);
+// Utility to replace visual pipe symbols '|' with actual FIX SOH (\x01) delimiters
+inline std::string sanitize_fix(std::string msg) {
+    std::replace(msg.begin(), msg.end(), '|', '\x01');
+    return msg;
+}
 
-    // std::cout << parser[8] << std::endl;
-	std::cout << "Cmake is working" << std::endl;
+// Struct to hold individual test case definitions
+struct TestCase {
+    int id;
+    std::string name;
+    std::string raw_msg;
+    bool expected_valid;
+};
+
+// Runner function: compares actual parser output with expected boolean
+bool run_test(const TestCase& test) {
+    std::string formatted_msg = sanitize_fix(test.raw_msg);
+    bool actual_result = false;
+
+    try {
+        Parser parse(formatted_msg);
+        // Assuming parse.isValid() or parse.parse() returns a boolean outcome.
+        // Adjust this method call to match your Parser class API:
+        actual_result = parse.valid(); 
+    } 
+    catch (...) {
+        // If your parser throws on invalid input instead of returning false
+        actual_result = false; 
+    }
+
+    bool passed = (actual_result == test.expected_valid);
+
+    if (!passed)
+        std::cout << "parser err: " << (int)parser_errno << std::endl;
+    std::cout << "[" << (passed ? "PASS" : "FAIL") << "] Test " 
+              << (test.id < 10 ? "0" : "") << test.id << ": " 
+              << test.name << std::endl;
+
+    if (!passed) {
+        std::cout << "   Expected: " << (test.expected_valid ? "true" : "false")
+                  << " | Got: " << (actual_result ? "true" : "false") << "\n";
+    }
+
+    return passed;
+}
+
+// Execution suite for all 44 FIX message scenarios
+void run_all_tests() {
+    const std::vector<TestCase> tests = {
+        // ID, Description, Raw FIX Message, Expected Result
+        {1, "Valid New Order Single", "8=FIX.4.4|9=72|35=1|49=BuySide|56=SellSide|34=2|52=20190605-16:56:17.419|112=TestReqID|10=215|", true},
+        {2, "Empty message", "", false},
+        {3, "Missing SOH", "8=FIX.4.49=10535=D34=149=CLIENT56=SERVER11=ORDER155=AAPL54=138=10040=244=150.5010=118", false},
+        {4, "Wrong first tag", "35=D|8=FIX.4.4|9=105|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {5, "Missing 9", "8=FIX.4.4|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {6, "Invalid BodyLength", "8=FIX.4.4|9=ABC|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {7, "BodyLength = 0", "8=FIX.4.4|9=0|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {8, "BodyLength too small", "8=FIX.4.4|9=5|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {9, "BodyLength too large", "8=FIX.4.4|9=500|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {10, "Body doesn't end at SOH", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.5010=118|", false},
+        {11, "Malformed field", "8=FIX.4.4|9=105|35D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {12, "Non-numeric tag", "8=FIX.4.4|9=105|XX=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {13, "Empty tag", "8=FIX.4.4|9=105|=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {14, "Empty field", "8=FIX.4.4|9=105|35=|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {15, "Duplicate tag", "8=FIX.4.4|9=105|35=D|34=1|34=2|49=CLIENT|56=SERVER|10=118|", false},
+        {16, "Missing checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|", false},
+        {17, "Wrong checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=999|", false},
+        {18, "Non-numeric checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=ABC|", false},
+        {19, "2-digit checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=18|", false},
+        {20, "4-digit checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=0118|", false},
+        {21, "Checksum > 255", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=256|", false},
+        {22, "Data after checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=118|EXTRA", false},
+        {23, "Missing 35", "8=FIX.4.4|9=105|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {24, "Missing 34", "8=FIX.4.4|9=105|35=D|49=CLIENT|56=SERVER|10=118|", false},
+        {25, "Missing 49", "8=FIX.4.4|9=105|35=D|34=1|56=SERVER|10=118|", false},
+        {26, "Missing 56", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|10=118|", false},
+        {27, "35=D valid", "8=FIX.4.4|9=100|35=D|34=1|49=CLIENT|56=SERVER|52=20260925-16:46:00.000|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=106|", true},        {28, "35=D missing 11", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|55=AAPL|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {29, "35=D missing 55", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {30, "35=D missing 54", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|38=100|40=2|44=150.50|10=118|", false},
+        {31, "35=D missing 38", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|40=2|44=150.50|10=118|", false},
+        {32, "35=D missing 40", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|44=150.50|10=118|", false},
+        {33, "Invalid 54", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=9|38=100|40=2|44=150.50|10=118|", false},
+        {34, "Invalid 38", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=-10|40=2|44=150.50|10=118|", false},
+        {35, "Invalid 44", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=FREE|10=118|", false},
+        {36, "Invalid 40", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=9|44=150.50|10=118|", false},
+        {37, "40=1 without 44", "8=FIX.4.4|9=90|35=D|34=1|49=CLIENT|56=SERVER|52=20260925-16:46:00.000|11=ORDER1|55=AAPL|54=1|38=100|40=1|10=114|", true}, // Market order doesn't need price
+        {38, "40=2 with 44", "8=FIX.4.4|9=100|35=D|34=1|49=CLIENT|56=SERVER|52=20260925-16:46:00.000|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=106|", true}, // Limit order needs price
+        {39, "40=2 without 44", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|10=118|", false},
+        {40, "Unknown 35", "8=FIX.4.4|9=105|35=ZZ|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {41, "Field-order violations", "8=FIX.4.4|9=105|34=1|35=D|49=CLIENT|56=SERVER|10=118|", false}, // Tag 35 must follow Tag 9
+        {42, "Extremely large fields", "8=FIX.4.4|9=105|35=D|34=1|49=" + std::string(1000, 'A') + "|56=SERVER|10=118|", false},
+        {43, "Extremely large BodyLength", "8=FIX.4.4|9=999999999|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {44, "Random/fuzz input", "alksjd%#$!@#\x01\x029=35=D|==", false}
+    };
+
+    int passed_count = 0;
+    for (const auto& test : tests) {
+        if (run_test(test)) {
+            passed_count++;
+        }
+    }
+
+    std::cout << "\n----------------------------------------\n";
+    std::cout << "Results: " << passed_count << " / " << tests.size() << " passed.\n";
+    std::cout << "----------------------------------------\n";
 }
