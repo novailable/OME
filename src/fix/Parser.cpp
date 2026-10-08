@@ -36,7 +36,7 @@ bool    Parser::tagcheck(unsigned tags)
 
 Parser::Parser(std::string_view raw)
 {
-    size_t  start = 0, pos;
+    size_t  start = 0;
 
     if (!get_header(raw, start))
         return;

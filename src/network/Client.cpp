@@ -18,6 +18,8 @@ Client::~Client()  {}
 
 void    Client::handle(uint32_t events)
 {
+	if (events & POLL_IN)
+		std::cout << "reading" << std::endl;
     constexpr   size_t  CHUNK = 4096;
     std::cout << "client read" << std::endl;
     while(true)
@@ -43,8 +45,6 @@ void    Client::handle(uint32_t events)
         cleanup();
         return ;
     }
-    // Parser  parser
-    Parser parser(_buffer);
 }
 
 void    Client::cleanup()
