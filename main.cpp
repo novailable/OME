@@ -9,6 +9,7 @@ int	main()
     Ome ome;
     // ome.run();
     ome.test_parser();
+	ome.test_engine();
 
     // std::cout << parser[8] << std::endl;
 	std::cout << "Cmake is working" << std::endl;

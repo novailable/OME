@@ -1,5 +1,239 @@
 #pragma once
 
+#include <array>
+#include <atomic>
+#include <cstddef>
+#include <memory>
+#include <new>
+#include <type_traits>
+#include <utility>
+
+template <typename T, std::size_t Capacity>
+class SPSCQueue
+{
+	private:
+		static_assert(Capacity > 1 && (Capacity & (Capacity - 1)) == 0,
+					"Capacity must be a power of 2 and greater than 1");
+
+		// Raw memory capable of holding a T.
+		// No T objects are constructed here.
+		using Storage = std::aligned_storage_t<sizeof(T), alignof(T)>;
+
+		std::array<Storage, Capacity> _buffer;
+
+		alignas(64) std::atomic<std::size_t> _head{0};
+
+		alignas(64) std::atomic<std::size_t> _tail{0};
+
+		static constexpr std::size_t mask = Capacity - 1;
+
+		T* ptr(std::size_t index) noexcept
+		{
+			return std::launder(reinterpret_cast<T*>(&_buffer[index]));
+		}
+
+	public:
+		SPSCQueue() noexcept = default;
+
+		~SPSCQueue()
+		{
+			// Destroy objects that are still inside the queue.
+			std::size_t tail = _tail.load(std::memory_order_relaxed);
+			const std::size_t head = _head.load(std::memory_order_relaxed);
+
+			while (tail != head)
+			{
+				std::destroy_at(ptr(tail));
+				tail = (tail + 1) & mask;
+			}
+		}
+
+		bool push(const T& item)
+		{
+			const std::size_t head = _head.load(std::memory_order_relaxed);
+			const std::size_t next = (head + 1) & mask;
+
+			if (next == _tail.load(std::memory_order_acquire))
+				return false;
+
+			::new (static_cast<void*>(ptr(head))) T(item);
+			_head.store(next, std::memory_order_release);
+
+			return true;
+		}
+
+		bool push(T&& item)
+		{
+			const std::size_t head = _head.load(std::memory_order_relaxed);
+
+			const std::size_t next = (head + 1) & mask;
+
+			if (next == _tail.load(std::memory_order_acquire))
+				return false;
+
+			// Move-construct directly into queue slot.
+			::new (static_cast<void*>(ptr(head))) T(std::move(item));
+			_head.store(next, std::memory_order_release);
+
+			return true;
+		}
+
+		bool pop(T& out)
+		{
+			const std::size_t tail = _tail.load(std::memory_order_relaxed);
+
+			if (tail == _head.load(std::memory_order_acquire))
+				return false;
+
+			T* item = ptr(tail);
+			out = std::move(*item);
+			item->~T();
+
+			const std::size_t next = (tail + 1) & mask;
+
+			_tail.store(next, std::memory_order_release);
+
+			return true;
+		}
+
+		bool empty() const noexcept
+		{
+			const auto tail = _tail.load(std::memory_order_acquire);
+			const auto head = _head.load(std::memory_order_acquire);
+
+			return tail == head;
+		}
+};#pragma once
+
+#include "Server.hpp"
+#include "OrderBook.hpp"
+#include "Spscqueue.hpp"
+#include <thread>
+#include <atomic>
+#include <chrono>
+
+class   Ome
+{
+    private:
+        Server  _server;
+    public:
+        Ome();
+        ~Ome();
+        void    run();
+        void    test_parser();
+		void	test_engine();
+};
+#pragma once
+
+#include <string_view>
+
+class FixField
+{
+    public:
+        int tag() const;
+        std::string_view value() const;
+};
+
+class FixGroup
+{
+    private:
+        std::vector<FixField>   _fields;
+    public:
+        FixField get(int tag) const;
+        FixGroup group(int countTag, size_t index) const;
+};
+
+class FixMessage
+{
+    private:
+        std::vector<Fix
+    public:
+        FixField get(int tag) const;
+        FixGroup group(int countTag, size_t index) const;
+};#pragma once
+
+#include <vector>
+#include <string>
+#include <initializer_list>
+#include <cstdint>
+#include <string_view>
+#include <charconv>
+#include <iostream>
+
+// FIX.4.2
+
+constexpr uint8_t   T34 = 1 << 0;
+constexpr uint8_t   T35 = 1 << 1;
+constexpr uint8_t   T49 = 1 << 2;
+constexpr uint8_t   T56 = 1 << 3;
+constexpr uint8_t   T52 = 1 << 4;
+
+struct  Field
+{
+    int tag;
+    std::string_view    value;
+};
+
+enum struct ErrCode : uint8_t
+{
+    None,
+    BadCheckSum,
+    BadBodyLength,
+    MissingRequiredTag,
+    DuplicateTag,
+    UnknownMsgType,
+    MalformedField,
+    InvalidEnum
+};
+
+// std::iostream std::operator<<(std::ostream &out, ErrCode parser_errno)
+// {
+//     std::string output;
+
+//     switch(parser_errno)
+//     {
+//         case ErrCode::None : "Nth wrong"; break;
+//         case ErrCode::BadCheckSum : "Bad Check Sum" ; break;
+//         case ErrCode::
+//     }
+// }
+
+inline thread_local ErrCode parser_errno = ErrCode::None;
+
+class   Parser
+{
+    private:
+        static constexpr    char SOH = '\x01';
+        uint8_t _tag_check = 0;
+        size_t _body_len = 0;
+        bool    _valid = false;
+        std::vector<Field>    _fields;
+
+        bool    extract(std::string_view item, int &tag, std::string_view &value);
+        bool    checksum(std::string_view raw, size_t start);
+        bool    requiredtag(int tag);
+        bool    tagcheck(unsigned tags);
+        // bool    bodytag();
+        // bool    fieldformats();
+
+        template <typename T>
+        bool    num_format(T &num, std::string_view n, size_t size = std::string_view::npos)
+        {
+            size = (size == std::string_view::npos) ? n.size() : size;
+            std::from_chars_result result = std::from_chars(n.data(), n.data() + size, num);
+            return (result.ec == std::errc{} && result.ptr == n.data() + size);
+        }
+
+    public:
+        Parser(std::string_view raw);
+        [[nodiscard]]
+        bool    get_header(std::string_view raw, size_t &start);
+        std::string_view    get(int tag);
+        bool    valid() const;
+        void    view_fileds() const;
+};
+#pragma once
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -97,6 +331,174 @@ class   ClientManager
         void    remove(int fd);
         // void    add_message(std::string *msg);
 };
+#pragma once
+
+#include "Acceptor.hpp"
+#include "Reactor.hpp"
+#include "ClientManager.hpp"
+
+class Server
+{
+    private:
+        Acceptor    _acceptor;
+        Reactor     _reactor;
+        ClientManager   _c_manager;
+
+    public:
+        Server();
+        void    run();
+};
+#pragma once
+
+#include <cstdint>
+#include <string>
+
+enum struct Side : uint8_t
+{
+    Buy,
+    Sell
+};
+
+enum struct Type : uint8_t
+{
+    Limit,
+    Market
+};
+
+enum struct Status : uint8_t
+{
+    New,
+    PartiallyFilled,
+    Filled,
+    Cancelled,
+    Rejected
+};
+
+using OrderId  = uint64_t;
+using ClientId = uint64_t;
+using Price    = int64_t;
+using Quantity = uint64_t;
+using Symbol   = std::string;
+
+class Order
+{
+	private:
+		OrderId     _id;
+		ClientId    _client_id;
+		Symbol      _symbol;
+		Side        _side;
+		Type        _type;
+		Price       _price;
+		Quantity    _quantity;
+		Quantity    _filled_qty;
+		Status      _status;
+		uint64_t    _timestamp;
+
+	public:
+		Order(
+			OrderId id,
+			ClientId client_id,
+			Symbol symbol,
+			Side side,
+			Type type,
+			Price price,
+			Quantity quantity,
+			uint64_t timestamp
+		);
+
+		OrderId id() const { return _id; }
+		ClientId client_id() const { return _client_id; }
+
+		const Symbol& symbol() const { return _symbol; }
+
+		Side side() const { return _side; }
+		Type type() const { return _type; }
+
+		Price price() const { return _price; }
+		Quantity quantity() const { return _quantity; }
+		Quantity filled_qty() const { return _filled_qty; }
+
+		Quantity remaining() const
+		{
+			return _quantity - _filled_qty;
+		}
+
+		Status status() const
+		{
+			return _status;
+		}
+
+		uint64_t timestamp() const
+		{
+			return _timestamp;
+		}
+
+		void fill(Quantity qty);
+		void cancel();
+};
+
+#pragma once
+
+#include <map>
+#include <list>
+#include <unordered_map>
+#include <memory>
+#include <vector>
+#include "Order.hpp"
+#include "Trade.h"
+
+struct PriceLevel
+{
+    std::list<std::shared_ptr<Order>> orders;
+};
+
+class OrderBook
+{
+	private:
+		using OrderPtr = std::shared_ptr<Order>;
+
+		// Where a resting order's node lives, captured at insertion time,
+		// so cancel() never has to scan a price level to find it.
+		struct BookLocation
+		{
+			Price price;
+			std::list<OrderPtr>::iterator it;
+		};
+
+		std::map<Price, PriceLevel, std::greater<Price>> _bids;
+		std::map<Price, PriceLevel, std::less<Price>> _asks;
+		std::unordered_map<OrderId, OrderPtr> _orders;        // id -> order object
+		std::unordered_map<OrderId, BookLocation> _locations;  // id -> where it rests
+		std::vector<Trade> _trades;
+		uint64_t _timestamp = 0;
+
+	private:
+		void match_buy(OrderPtr incoming);
+		void match_sell(OrderPtr incoming);
+		void execute(const OrderPtr& incoming, const OrderPtr& resting, Quantity quantity, Price price);
+
+	public:
+		void add(OrderPtr order);
+		bool cancel(OrderId id);
+		const std::vector<Trade>& trades() const { return _trades; }
+		void clear_trades() { _trades.clear(); }
+		void print_book() const;
+};#pragma once
+
+#include "Order.hpp"
+
+struct Trade
+{
+    OrderId  buy_id;
+    OrderId  sell_id;
+
+    Symbol   symbol;
+
+    Price    price;
+    Quantity quantity;
+
+    uint64_t timestamp;
+};
 #ifndef EPOLL_HPP
 #define EPOLL_HPP
 
@@ -135,78 +537,7 @@ struct Epoll
 };
 
 #endif
-#pragma once
-
-#include <fcntl.h>
-#include <unistd.h>
-
-#include "Utils.hpp"
-
-class Fd
-{
-    private:
-        int _fd;
-        
-    public:
-        explicit Fd(int fd = -1) : _fd(fd) {};
-
-        Fd(const Fd&) = delete;
-        Fd  &operator=(const Fd&) = delete;
-        Fd  &operator=(int fd)
-        {
-            if (_fd < 0)
-                _fd = fd;
-            return (*this);
-        }
-        ~Fd() { close(); }
-
-        int get() const { return (_fd); }
-        void    close()
-        {
-            if (_fd >= 0)
-                if (::close(_fd) < 0)
-                    throw_("fd closing failed");
-            _fd = -1;
-        };
-
-        void    set_nblock()
-        {
-            if (_fd < 0)
-                throw_("none file descriptor to set non-blocking");
-            if (fcntl(_fd, F_SETFL, fcntl(_fd, F_GETFL, 0) | O_NONBLOCK) < 0)
-                throw_("non-blocking set failed");
-        }
-
-        operator int() const {return _fd;}
-};
-#pragma once
-
-#include <string_view>
-
-class FixField
-{
-    public:
-        int tag() const;
-        std::string_view value() const;
-};
-
-class FixGroup
-{
-    private:
-        std::vector<FixField>   _fields;
-    public:
-        FixField get(int tag) const;
-        FixGroup group(int countTag, size_t index) const;
-};
-
-class FixMessage
-{
-    private:
-        std::vector<Fix
-    public:
-        FixField get(int tag) const;
-        FixGroup group(int countTag, size_t index) const;
-};#ifndef IPOLLABLE_HPP
+#ifndef IPOLLABLE_HPP
 #define IPOLLABLE_HPP
 
 struct	IPollable
@@ -247,153 +578,6 @@ struct Kqueue
         int wait(Events &ready, int timeout);
         int fd() const;
 };#pragma once
-
-#include "Server.hpp"
-
-class   Ome
-{
-    private:
-        Server  _server;
-    public:
-        Ome();
-        ~Ome();
-        void    run();
-        void    test_parser();
-};
-enum struct Side : uint8_t {
-    Buy,
-    Sell
-};
-
-enum struct Type : uint8_t {
-    Limit,
-    Market
-    // Add Stop, IOC, FOK etc later if you want — don't over-engineer day one
-};
-
-enum struct Status : uint8_t {
-    New,
-    PartiallyFilled,
-    Filled,
-    Cancelled,
-    Rejected
-};
-
-using OrderId    = uint64_t;
-using ClientId   = uint64_t;
-using Price      = int64_t;
-using Quantity   = uint64_t;
-using Symbol     = std::string;
-
-class Order
-{
-    private:
-        OrderId     _id;
-        ClientId    _client_id;
-        Symbol      _symbol;
-        Side        _side;
-        Type        _type;
-        Price       _price;
-        Quantity    _quantity;
-        Quantity    _filled_qty = 0;
-        Status      _status = OrderStatus::New;
-        uint64_t    _timestamp;
-
-    public:
-        Order(OrderId id, ClientId client_id, Symbol symbol, Side side,
-            Type type, Price price, Quantity quantity, uint64_t timestamp);
-
-        void fill(Quantity qty); // asserts qty <= remaining(), updates status
-        void cancel();
-
-        Quantity remaining() const { return quantity_ - filled_qty_; }
-        Status status() const { return status_; }
-        // getters for id, symbol, side, price, etc.
-};
-#pragma once
-#pragma once
-
-#include <vector>
-#include <string>
-#include <initializer_list>
-#include <cstdint>
-#include <string_view>
-#include <charconv>
-#include <iostream>
-
-// FIX.4.2
-
-constexpr uint8_t   T34 = 1 << 0;
-constexpr uint8_t   T35 = 1 << 1;
-constexpr uint8_t   T49 = 1 << 2;
-constexpr uint8_t   T56 = 1 << 3;
-constexpr uint8_t   T52 = 1 << 4;
-
-struct  Field
-{
-    int tag;
-    std::string_view    value;
-};
-
-enum struct ErrCode : uint8_t
-{
-    None,
-    BadCheckSum,
-    BadBodyLength,
-    MissingRequiredTag,
-    DuplicateTag,
-    UnknownMsgType,
-    MalformedField,
-    InvalidEnum
-};
-
-// std::iostream std::operator<<(std::ostream &out, ErrCode parser_errno)
-// {
-//     std::string output;
-
-//     switch(parser_errno)
-//     {
-//         case ErrCode::None : "Nth wrong"; break;
-//         case ErrCode::BadCheckSum : "Bad Check Sum" ; break;
-//         case ErrCode::
-//     }
-// }
-
-inline thread_local ErrCode parser_errno = ErrCode::None;
-
-class   Parser
-{
-    private:
-        static constexpr    char SOH = '\x01';
-        uint8_t _tag_check = 0;
-        size_t _body_len = 0;
-        bool    _valid = false;
-        std::vector<Field>    _fields;
-
-        bool    extract(std::string_view item, int &tag, std::string_view &value);
-        bool    checksum(std::string_view raw, size_t start);
-        bool    requiredtag(int tag);
-        bool    tagcheck(unsigned tags);
-        // bool    bodytag();
-        // bool    fieldformats();
-
-        template <typename T>
-        bool    num_format(T &num, std::string_view n, size_t size = std::string_view::npos)
-        {
-            size = (size == std::string_view::npos) ? n.size() : size;
-            std::from_chars_result result = std::from_chars(n.data(), n.data() + size, num);
-            return (result.ec == std::errc{} && result.ptr == n.data() + size);
-        }
-
-    public:
-        Parser(std::string_view raw);
-        [[nodiscard]]
-        bool    get_header(std::string_view raw, size_t &start);
-        std::string_view    get(int tag);
-        bool    valid() const;
-        void    view_fileds() const;
-};
-#pragma once
 
 #include <cstdint>
 #include <array>
@@ -460,427 +644,49 @@ public:
 };
 #pragma once
 
-#include "Acceptor.hpp"
-#include "Reactor.hpp"
-#include "ClientManager.hpp"
+#include <fcntl.h>
+#include <unistd.h>
 
-class Server
+#include "Utils.hpp"
+
+class Fd
 {
     private:
-        Acceptor    _acceptor;
-        Reactor     _reactor;
-        ClientManager   _c_manager;
-
+        int _fd;
+        
     public:
-        Server();
-        void    run();
+        explicit Fd(int fd = -1) : _fd(fd) {};
+
+        Fd(const Fd&) = delete;
+        Fd  &operator=(const Fd&) = delete;
+        Fd  &operator=(int fd)
+        {
+            if (_fd < 0)
+                _fd = fd;
+            return (*this);
+        }
+        ~Fd() { close(); }
+
+        int get() const { return (_fd); }
+        void    close()
+        {
+            if (_fd >= 0)
+                if (::close(_fd) < 0)
+                    throw_("fd closing failed");
+            _fd = -1;
+        };
+
+        void    set_nblock()
+        {
+            if (_fd < 0)
+                throw_("none file descriptor to set non-blocking");
+            if (fcntl(_fd, F_SETFL, fcntl(_fd, F_GETFL, 0) | O_NONBLOCK) < 0)
+                throw_("non-blocking set failed");
+        }
+
+        operator int() const {return _fd;}
 };
-#pragma once
-
-#include <system_error>
-#include <iostream>
-
-[[noreturn]] inline void throw_(const char *msg)
-{
-    throw   std::system_error(errno, std::generic_category(), msg);
-}
-#include "Server.hpp"
-#include "Utils.hpp"
-
-Acceptor::Acceptor() : _fd(-1) , _c_manager(nullptr) {}
-
-Acceptor::~Acceptor()
-{
-    // for(auto& [fd, buffer] : _clients)
-    // {
-    //     epoll_del(fd);
-    //     ::close(fd);
-    // }
-    // _clients.clear();
-    // end();
-}
-
-void    Acceptor::set_c_manager(ClientManager &c_manager)
-{
-    _c_manager = &c_manager;
-}
-
-void    Acceptor::create_socket(std::string &ip, std::string port)
-{
-    _ip = ip;
-    _port = port;
-    addrinfo hints{};
-    addrinfo *result = nullptr;
-    
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-
-    int err = getaddrinfo(ip.empty() ? nullptr : 
-        ip.c_str(), _port.c_str(), &hints, &result);
-    if (err != 0)
-        throw   std::runtime_error(gai_strerror(err));
-    try
-    {
-        _fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-        if (_fd < 0)
-            throw_("server socket failed");
-        int opt = 1;
-        setsockopt(_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt));
-        if (bind(_fd, result->ai_addr, result->ai_addrlen) < 0)
-            throw_("bind() failed");
-        if (listen(_fd, SOMAXCONN) < 0)
-            throw_("listen() failed");
-        _fd.set_nblock();
-    }
-    catch (std::exception &e)
-    {
-        std::cout << e.what() << std::endl;
-        freeaddrinfo(result);
-        throw;
-    }
-    freeaddrinfo(result);
-}
-
-
-
-void    Acceptor::end()
-{
-    _fd.close();
-}
-
-int Acceptor::fd() const
-{
-    return (_fd);
-}
-
-void    Acceptor::handle(uint32_t events)
-{
-    int client_fd = -1;
-
-    if (!(events & READ))
-        return ;
-    while(true)
-    {
-        sockaddr_in client_addr{};
-        socklen_t   client_len = sizeof(client_addr);
-        client_fd = accept(_fd, (sockaddr *)&client_addr, &client_len);
-
-        if (client_fd < 0)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return;
-
-            throw_("Connection: Accept");
-            return;
-        }
-        _c_manager->create(client_fd, client_addr);
-    }
-}#include "Client.hpp"
-#include "ClientManager.hpp"
-
-Client::Client(int fd, sockaddr_in addr, ClientManager *manager) : _fd(fd), _addr(addr), _manager(manager)
-{
-    _ip = inet_ntoa(_addr.sin_addr);
-    _port = ntohs(_addr.sin_port);
-
-    _fd.set_nblock();
-    // _time = time(NULL);
-    _buffer.reserve(4096);
-    std::cout << "[client]\tclient connected\t\t| " << _ip << ":" 
-                << _port << " | socket:" << _fd << std::endl;
-
-}
-
-Client::~Client()  {}
-
-void    Client::handle(uint32_t events)
-{
-    constexpr   size_t  CHUNK = 4096;
-    std::cout << "client read" << std::endl;
-    while(true)
-    {
-        size_t  pre_size = _buffer.size();
-        _buffer.resize(pre_size + CHUNK);
-        ssize_t bytes = recv(_fd, (void *)_buffer.data() + pre_size, CHUNK, 0);
-        if (bytes > 0)
-        {
-            _buffer.resize(pre_size + static_cast<size_t>(bytes));
-            continue;
-        }
-        _buffer.resize(pre_size);
-
-        if (bytes == 0)
-        {
-            std::cout << "disconnected" << std::endl;
-            cleanup();
-            return ;
-        }
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            break;
-        cleanup();
-        return ;
-    }
-}
-
-void    Client::cleanup()
-{
-    std::cout << "[client]\tclient disconnected\t\t| " << _ip << ":" 
-                << _port << " | socket:" << _fd << std::endl;
-    _manager->remove(_fd);
-
-}
-
-int Client::fd() const
-{
-    return (_fd);
-}
-
-#include "ClientManager.hpp"
-
-// ClientManager::ClientManager(Reactor &reactor) : _reactor(reactor) {}
-
-ClientManager::ClientManager()
-{
-    
-}
-
-void    ClientManager::create(int fd, sockaddr_in addr)
-{
-    std::unique_ptr<Client> client = std::make_unique<Client>(fd, addr, this);
-    _clients.emplace(fd, std::move(client));
-    _reactor->add(_clients[fd].get(), READ);
-    std::cout << "client is added to epoll" << std::endl;
-}
-
-void    ClientManager::remove(int fd)
-{
-    auto    it = _clients.find(fd);
-    if (it == _clients.end())
-        return ;
-    _reactor->del(it->second.get());
-    _clients.erase(it);
-    std::cout << "[manager]\tclient removed\t\t| socket:" << fd << std::endl;
-}
-
-void    ClientManager::set_reactor(Reactor& reactor)
-{
-    _reactor = &reactor;
-}
-
-// void    ClientManager::add_message(const chars)
-// {
-    
-// }#include "Epoll.hpp"
-#include "IPollable.hpp"
-#include "Utils.hpp"
-
-Epoll::Epoll() : _fd(-1) {}
-
-Epoll::~Epoll()
-{
-	// std::set<IPollable*>	destory;
-
-	// for (auto it = _objs.begin(); it != _objs.end(); ++it)
-	// {
-	// 	IPollable* obj = it->second;
-	// 	if (obj)
-	// 		destory.insert(obj);
-	// }
-	// for (std::set<IPollable*>::iterator it = destory.begin(); it != destory.end(); ++it)
-	// {
-	// 	IPollable* obj = *it;
-	// 	if (obj)
-	// 		obj->cleanup();
-	// }
-}
-
-// Epoll&	Epoll::instance()
-// {
-// 	static Epoll	inst;
-// 	return (inst);
-// }
-
-int	Epoll::init()
-{
-	
-	_fd = epoll_create1(EPOLL_CLOEXEC);
-	if (_fd < 0)
-		throw_("epoll creation failed!");
-	return (0);
-}
-
-uint32_t	Epoll::flags(PollFlags flags)
-{
-	return ((flags & READ ? EPOLLIN : 0)
-			| (flags & WRITE ? EPOLLOUT : 0)
-			| (flags & ERR ? EPOLLERR : 0)
-			| (flags & HUP ? EPOLLHUP : 0))
-			| (flags & EDGE ? EPOLLET : 0);
-}
-
-PollFlags	Epoll::flags(uint32_t events)
-{
-	return (static_cast<PollFlags>
-			((events & EPOLLIN  ? READ  : 0)
-        	| (events & EPOLLOUT ? WRITE : 0)
-			| (events & EPOLLERR ? ERR : 0)
-			| (events & EPOLLHUP ? HUP : 0)));
-}
-
-int	Epoll::add_fd(IPollable* poll_obj, PollFlags events)
-{
-	if (_fd < 0)
-		throw_("No epoll object is found!");
-
-	struct epoll_event	ev{};
-	ev.events = flags(events);
-	ev.data.ptr = poll_obj;
-
-	int status = epoll_ctl(_fd, EPOLL_CTL_ADD, poll_obj->fd(), &ev);
-	if (status < 0)
-		throw_("epoll_ctl ADD failed!");
-	// _objs[obj_fd] = poll_obj;
-
-	return (status);
-}
-
-int Epoll::mod_fd(IPollable* poll_obj, PollFlags events)
-{
-	if (_fd < 0)
-		throw_("No epoll object is found!");
-	struct epoll_event	ev{};
-	ev.events = flags(events);
-	ev.data.ptr = poll_obj;
-	int status = epoll_ctl(_fd, EPOLL_CTL_MOD, poll_obj->fd(), &ev);
-	if (status < 0)
-		throw_("epoll_ctl MOD failed!");
-	return (status);
-}
-
-int Epoll::del_fd(IPollable* poll_obj)
-{
-    int	obj_fd = poll_obj->fd();
-   	int status = epoll_ctl(_fd, EPOLL_CTL_DEL, obj_fd, NULL);
-    if (status < 0)
-		throw_("epoll_ctl DELETE failed!");
-    return (status);
-}
-
-int Epoll::wait(Events &ready, int timeout)
-{
-	if (_fd < 0)
-		return (-1);
-	static struct epoll_event raw[1024]{};
-	int hits = epoll_wait(_fd, raw, MAX_EVENTS, timeout);
-	for(int i = 0; i < hits; ++i)
-	{
-		ready[i] = {static_cast<IPollable*>(raw[i].data.ptr), flags(raw[i].events)};
-	}
-	return (hits);
-}
-
-
-
-// void Epoll::objs_timeout()
-// {
-//     std::vector<IPollable*> timed_out;
-//     std::set<IPollable*> seen;
-    
-//     // Collect unique timed-out objects
-//     for (auto it = _objs.begin(); it != _objs.end(); ++it)
-//     {
-//         IPollable* obj = it->second;
-//         if (obj && obj->is_timeout())
-//         {
-//             if (seen.find(obj) == seen.end())
-//             {
-//                 seen.insert(obj);
-//                 timed_out.push_back(obj);
-//             }
-//         }
-//     }
-    
-//     // Call timeout on collected objects
-//     for (size_t i = 0; i < timed_out.size(); ++i)
-//     {
-//         IPollable* obj = timed_out[i];
-//         if (obj)
-//             obj->timeout();
-//     }
-// }
-
-int	Epoll::fd() const
-{
-	return (_fd);
-}
-#include "FixMsg.hpp"
-
-#include "Kqueue.hpp"
-#include "IPollable.hpp"
-#include "Utils.hpp"
-
-Kqueue::Kqueue() : _fd(-1) {}
-
-Kqueue::~Kqueue() {}
-
-int Kqueue::init()
-{
-    _fd = kqueue();
-    if (_fd < 0)
-        throw_("kqueue creation failed!");
-    return (0);
-}
-
-PollFlags	Kqueue::flags(int filter, uint16_t evflags)
-{
-	return static_cast<PollFlags>(
-		  ((filter == EVFILT_READ)  ? READ : 0)
-		| ((filter == EVFILT_WRITE) ? WRITE : 0)
-		| ((evflags & EV_EOF)   ? HUP : 0)
-		| ((evflags & EV_ERROR) ? ERR : 0));
-}
-
-int Kqueue::add_fd(IPollable* poll_obj, uint32_t flags)
-{
-    struct kevent changes[2];
-    int n = 0;
-    uint16_t clear = (flags & EDGE) ? EV_CLEAR : 0;
-
-    if (flags & READ)
-        EV_SET(&changes[n++], poll_obj->fd(), EVFILT_READ, EV_ADD | clear, 0, 0, poll_obj);
-    if (flags & WRITE)
-        EV_SET(&changes[n++], poll_obj->fd(), EVFILT_WRITE, EV_ADD | clear, 0, 0, poll_obj);
-
-    return kevent(_fd, changes, n, nullptr, 0, nullptr);
-}
-
-int Kqueue::mod_fd(IPollable* poll_obj, uint32_t flags)
-{
-    return add_fd(poll_obj, flags);
-}
-
-int Kqueue::del_fd(IPollable* poll_obj)
-{
-    struct kevent changes[2];
-    EV_SET(&changes[0], poll_obj->fd(), EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-    EV_SET(&changes[1], poll_obj->fd(), EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-    kevent(_fd, changes, 2, nullptr, 0, nullptr); // ENOENT expected if only 1 filter was set
-    return (0);
-}
-
-int Kqueue::wait(Events &ready, int timeout)
-{
-    static struct kevent raw[MAX_EVENTS];
-    struct timespec ts{timeout / 1000, (timeout % 1000) * 1000000};
-
-    int hits = kevent(_fd, nullptr, 0, raw, MAX_EVENTS, timeout >= 0 ? &ts : nullptr);
-    for (int i = 0; i < hits; ++i)
-		ready[i] = {static_cast<IPollable*>(raw[i].udata), flags(raw[i].filter, raw[i].flags)};
-    return (hits);
-}
-
-int Kqueue::fd() const { return (_fd); }#include "Ome.hpp"
+#include "Ome.hpp"
 #include "Parser.hpp"
 
 void run_all_tests();
@@ -902,7 +708,98 @@ void    Ome::test_parser()
     // run_all_tests();
     parser.view_fileds();
     std::cout << parser.valid() << std::endl;
-}#include "Parser.hpp"
+}
+
+static SPSCQueue<Order, 1024> g_queue;
+static std::atomic<bool> g_producer_done{false};
+
+static void producer()
+{
+    // A small hand-written sequence of orders designed to produce a
+    // few visible trades plus some orders left resting in the book.
+    std::vector<Order> orders = {
+        {1, 100, "BTCUSD", Side::Sell, Type::Limit, 101, 50, 1}, // rests: bid 100 x10
+        {2, 102, "BTCUSD", Side::Sell, Type::Limit, 102, 5, 0}, // rests: ask 102 x5  (no cross, 100 < 102)
+        {3, 102, "BTCUSD", Side::Sell, Type::Limit, 102, 5, 0}, // crosses ask 102 -> trades 5 @102, ask emptied
+        {4, 103, "BTCUSD", Side::Sell, Type::Limit, 99, 8, 4}, // crosses bid 100 -> trades 8 @100, bid 100 left qty 2
+		{5, 104, "BTCUSD", Side::Sell, Type::Limit, 99, 5, 5}, // crosses remaining bid 100 x2 @100, rests ask 99 x18
+       	{6, 105, "BTCUSD", Side::Buy, Type::Limit, 101, 2, 6} // crosses resting ask 99 -> trade 3 @99, ask 99 left 15
+    };
+
+    for (auto o : orders)
+    {
+        // spin until there's room -- queue is tiny here so this is
+        // effectively instant, but this is the backpressure point
+        // in a real system.
+        while (!g_queue.push(o))
+            std::this_thread::yield();
+ 
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    g_producer_done.store(true, std::memory_order_release);
+}
+
+static void	matcher()
+{
+	OrderBook book;
+    Order order(0,0, "Placeholder", Side::Buy, Type::Limit, 0, 0, 0);
+ 
+    for (;;)
+    {
+        if (g_queue.pop(order))
+        {
+			auto	order_ptr = std::make_shared<Order>(order);
+			book.add(order_ptr);
+            std::vector<Trade> trades = book.trades();
+            for (const auto& t : trades)
+            {
+                std::cout << "TRADE: buy#" << t.buy_id
+                          << " x sell#" << t.sell_id
+                          << " qty=" << t.quantity
+                          << " px=" << t.price << "\n";
+            }
+			book.clear_trades();
+            continue;
+        }
+ 
+        // queue looked empty -- but only stop once we also know the
+        // producer is finished AND we've drained whatever it pushed
+        // right before setting the flag. acquire here pairs with the
+        // producer's release store above.
+        if (g_producer_done.load(std::memory_order_acquire))
+        {
+            if (!g_queue.pop(order)) // final drain check
+                break;
+			auto	order_ptr = std::make_shared<Order>(order);
+			book.add(order_ptr);
+            std::vector<Trade> trades = book.trades();
+            for (const auto& t : trades)
+            {
+                std::cout << "TRADE: buy#" << t.buy_id
+                          << " x sell#" << t.sell_id
+                          << " quantity=" << t.quantity
+                          << " px=" << t.price << "\n";
+            }
+            continue;
+        }
+ 
+        std::this_thread::yield();
+    }
+ 
+    std::cout << "\nFinal book state:\n";
+    book.print_book();
+}
+
+void	Ome::test_engine()
+{
+	std::thread producer_thread(producer);
+    std::thread matcher_thread(matcher);
+ 
+    producer_thread.join();
+    matcher_thread.join();
+}#include "FixMsg.hpp"
+
+#include "Parser.hpp"
 
 bool    Parser::extract(std::string_view item, int &tag, std::string_view &value)
 {
@@ -940,7 +837,7 @@ bool    Parser::tagcheck(unsigned tags)
 
 Parser::Parser(std::string_view raw)
 {
-    size_t  start = 0, pos;
+    size_t  start = 0;
 
     if (!get_header(raw, start))
         return;
@@ -1115,7 +1012,667 @@ bool    Parser::valid() const
 {
     return (_valid);
 }
-#include "Reactor.hpp"
+#include "Server.hpp"
+#include "Utils.hpp"
+
+Acceptor::Acceptor() : _fd(-1) , _c_manager(nullptr) {}
+
+Acceptor::~Acceptor()
+{
+    // for(auto& [fd, buffer] : _clients)
+    // {
+    //     epoll_del(fd);
+    //     ::close(fd);
+    // }
+    // _clients.clear();
+    // end();
+}
+
+void    Acceptor::set_c_manager(ClientManager &c_manager)
+{
+    _c_manager = &c_manager;
+}
+
+void    Acceptor::create_socket(std::string &ip, std::string port)
+{
+    _ip = ip;
+    _port = port;
+    addrinfo hints{};
+    addrinfo *result = nullptr;
+    
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    int err = getaddrinfo(ip.empty() ? nullptr : 
+        ip.c_str(), _port.c_str(), &hints, &result);
+    if (err != 0)
+        throw   std::runtime_error(gai_strerror(err));
+    try
+    {
+        _fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+        if (_fd < 0)
+            throw_("server socket failed");
+        int opt = 1;
+        setsockopt(_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&opt), sizeof(opt));
+        if (bind(_fd, result->ai_addr, result->ai_addrlen) < 0)
+            throw_("bind() failed");
+        if (listen(_fd, SOMAXCONN) < 0)
+            throw_("listen() failed");
+        _fd.set_nblock();
+    }
+    catch (std::exception &e)
+    {
+        std::cout << e.what() << std::endl;
+        freeaddrinfo(result);
+        throw;
+    }
+    freeaddrinfo(result);
+}
+
+
+
+void    Acceptor::end()
+{
+    _fd.close();
+}
+
+int Acceptor::fd() const
+{
+    return (_fd);
+}
+
+void    Acceptor::handle(uint32_t events)
+{
+    int client_fd = -1;
+
+    if (!(events & READ))
+        return ;
+    while(true)
+    {
+        sockaddr_in client_addr{};
+        socklen_t   client_len = sizeof(client_addr);
+        client_fd = accept(_fd, (sockaddr *)&client_addr, &client_len);
+
+        if (client_fd < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return;
+
+            throw_("Connection: Accept");
+            return;
+        }
+        _c_manager->create(client_fd, client_addr);
+    }
+}#include "Client.hpp"
+#include "ClientManager.hpp"
+
+Client::Client(int fd, sockaddr_in addr, ClientManager *manager) : _fd(fd), _addr(addr), _manager(manager)
+{
+    _ip = inet_ntoa(_addr.sin_addr);
+    _port = ntohs(_addr.sin_port);
+
+    _fd.set_nblock();
+    // _time = time(NULL);
+    _buffer.reserve(4096);
+    std::cout << "[client]\tclient connected\t\t| " << _ip << ":" 
+                << _port << " | socket:" << _fd << std::endl;
+
+}
+
+Client::~Client()  {}
+
+void    Client::handle(uint32_t events)
+{
+	if (events & POLL_IN)
+		std::cout << "reading" << std::endl;
+    constexpr   size_t  CHUNK = 4096;
+    std::cout << "client read" << std::endl;
+    while(true)
+    {
+        size_t  pre_size = _buffer.size();
+        _buffer.resize(pre_size + CHUNK);
+        ssize_t bytes = recv(_fd, _buffer.data() + pre_size, CHUNK, 0);
+        if (bytes > 0)
+        {
+            _buffer.resize(pre_size + static_cast<size_t>(bytes));
+            continue;
+        }
+        _buffer.resize(pre_size);
+
+        if (bytes == 0)
+        {
+            std::cout << "disconnected" << std::endl;
+            cleanup();
+            return ;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            break;
+        cleanup();
+        return ;
+    }
+}
+
+void    Client::cleanup()
+{
+    std::cout << "[client]\tclient disconnected\t\t| " << _ip << ":" 
+                << _port << " | socket:" << _fd << std::endl;
+    _manager->remove(_fd);
+
+}
+
+int Client::fd() const
+{
+    return (_fd);
+}
+
+#include "ClientManager.hpp"
+
+// ClientManager::ClientManager(Reactor &reactor) : _reactor(reactor) {}
+
+ClientManager::ClientManager()
+{
+    
+}
+
+void    ClientManager::create(int fd, sockaddr_in addr)
+{
+    std::unique_ptr<Client> client = std::make_unique<Client>(fd, addr, this);
+    _clients.emplace(fd, std::move(client));
+    _reactor->add(_clients[fd].get(), READ);
+    std::cout << "client is added to epoll" << std::endl;
+}
+
+void    ClientManager::remove(int fd)
+{
+    auto    it = _clients.find(fd);
+    if (it == _clients.end())
+        return ;
+    _reactor->del(it->second.get());
+    _clients.erase(it);
+    std::cout << "[manager]\tclient removed\t\t| socket:" << fd << std::endl;
+}
+
+void    ClientManager::set_reactor(Reactor& reactor)
+{
+    _reactor = &reactor;
+}
+
+// void    ClientManager::add_message(const chars)
+// {
+    
+// }#include "Server.hpp"
+
+Server::Server()
+{
+    std::string ip = "127.0.0.1", port = "8080";
+    _acceptor.create_socket(ip, port);
+    std::cout << "Server - " << ip << ":" << port << std::endl; 
+    _reactor.add(&_acceptor, READ | EDGE);
+    std::cout << "Server is added to epoll" << std::endl;
+}
+
+void    Server::run()
+{
+    _c_manager.set_reactor(_reactor);
+    _acceptor.set_c_manager(_c_manager);
+    _reactor.run();
+}#include "Order.hpp"
+#include <stdexcept>
+
+Order::Order(
+    OrderId id,
+    ClientId client_id,
+    Symbol symbol,
+    Side side,
+    Type type,
+    Price price,
+    Quantity quantity,
+    uint64_t timestamp
+)
+    : _id(id),
+      _client_id(client_id),
+      _symbol(std::move(symbol)),
+      _side(side),
+      _type(type),
+      _price(price),
+      _quantity(quantity),
+      _filled_qty(0),
+      _status(Status::New),
+      _timestamp(timestamp)
+{
+}
+
+void Order::fill(Quantity qty)
+{
+    if (qty == 0 || qty > remaining())
+        throw std::logic_error("invalid fill quantity");
+
+    _filled_qty += qty;
+
+    if (_filled_qty == _quantity)
+        _status = Status::Filled;
+    else
+        _status = Status::PartiallyFilled;
+}
+
+void Order::cancel()
+{
+    if (_status == Status::Filled)
+        return;
+
+    _status = Status::Cancelled;
+}
+
+#include "OrderBook.hpp"
+#include <algorithm>
+#include <iostream>
+
+void OrderBook::add(OrderPtr order)
+{
+    if (!order)
+        return;
+    if (order->quantity() == 0)
+        return;
+
+    if (order->side() == Side::Buy)
+        match_buy(order);
+    else
+        match_sell(order);
+
+    // Fully filled against the resting book -- never rests, so it
+    // never enters _orders/_locations at all.
+    if (order->remaining() == 0)
+        return;
+
+    // A market order cannot rest in the book. Whatever could be
+    // matched already was, above; the remainder is dead.
+    if (order->type() == Type::Market)
+    {
+        order->cancel();
+        return;
+    }
+
+    // Rest it, and remember exactly where it landed.
+    if (order->side() == Side::Buy)
+    {
+        auto& lvl = _bids[order->price()].orders;
+        lvl.push_back(order);
+        _locations[order->id()] = { order->price(), std::prev(lvl.end()) };
+    }
+    else
+    {
+        auto& lvl = _asks[order->price()].orders;
+        lvl.push_back(order);
+        _locations[order->id()] = { order->price(), std::prev(lvl.end()) };
+    }
+
+    _orders[order->id()] = order;
+}
+
+void OrderBook::match_buy(OrderPtr incoming)
+{
+    while (incoming->remaining() > 0 && !_asks.empty())
+    {
+        auto level_it = _asks.begin();
+        Price ask_price = level_it->first;
+
+        if (incoming->type() == Type::Limit && ask_price > incoming->price())
+            break;
+
+        PriceLevel& level = level_it->second;
+
+        while (!level.orders.empty() && incoming->remaining() > 0)
+        {
+            OrderPtr resting = level.orders.front();
+            Quantity quantity = std::min(incoming->remaining(), resting->remaining());
+
+            execute(incoming, resting, quantity, resting->price());
+
+            if (resting->remaining() == 0)
+            {
+                _orders.erase(resting->id());
+                _locations.erase(resting->id());
+                level.orders.pop_front();
+            }
+        }
+
+        if (level.orders.empty())
+            _asks.erase(level_it);
+    }
+}
+
+void OrderBook::match_sell(OrderPtr incoming)
+{
+    while (incoming->remaining() > 0 && !_bids.empty())
+    {
+        auto level_it = _bids.begin();
+        Price bid_price = level_it->first;
+
+        if (incoming->type() == Type::Limit && bid_price < incoming->price())
+            break;
+
+        PriceLevel& level = level_it->second;
+
+        while (!level.orders.empty() && incoming->remaining() > 0)
+        {
+            OrderPtr resting = level.orders.front();
+            Quantity quantity = std::min(incoming->remaining(), resting->remaining());
+
+            execute(incoming, resting, quantity, resting->price());
+
+            if (resting->remaining() == 0)
+            {
+                _orders.erase(resting->id());
+                _locations.erase(resting->id());
+                level.orders.pop_front();
+            }
+        }
+
+        if (level.orders.empty())
+            _bids.erase(level_it);
+    }
+}
+
+void OrderBook::execute(const OrderPtr& incoming, const OrderPtr& resting,
+                         Quantity quantity, Price price)
+{
+    if (quantity == 0)
+        return;
+
+    incoming->fill(quantity);
+    resting->fill(quantity);
+
+    Trade trade{
+        .buy_id = incoming->side() == Side::Buy ? incoming->id() : resting->id(),
+        .sell_id = incoming->side() == Side::Sell ? incoming->id() : resting->id(),
+        .symbol = incoming->symbol(),
+        .price = price,
+        .quantity = quantity,
+        .timestamp = ++_timestamp
+    };
+
+    _trades.push_back(trade);
+
+    std::cout << "[TRADE] " << trade.quantity << " @ " << trade.price
+              << " | buy=" << trade.buy_id << " sell=" << trade.sell_id << '\n';
+}
+
+bool OrderBook::cancel(OrderId id)
+{
+    auto order_it = _orders.find(id);
+
+    // Not currently resting (never rested, already filled, or
+    // already cancelled) -- nothing to do.
+    if (order_it == _orders.end())
+        return false;
+
+    OrderPtr order = order_it->second;
+
+    if (order->status() == Status::Filled)
+        return false;
+
+    auto loc_it = _locations.find(id);
+    if (loc_it == _locations.end())
+        return false; // defensive: an entry in _orders should always have a location
+
+    const BookLocation loc = loc_it->second;
+
+    // No scan: we already know exactly which node to erase, because
+    // we saved the iterator when the order was first inserted.
+    auto erase_from_book = [&](auto& book)
+    {
+        auto level_it = book.find(loc.price);
+        if (level_it == book.end())
+            return;
+
+        level_it->second.orders.erase(loc.it); // O(1)
+
+        if (level_it->second.orders.empty())
+            book.erase(level_it);
+    };
+
+    if (order->side() == Side::Buy)
+        erase_from_book(_bids);
+    else
+        erase_from_book(_asks);
+
+    order->cancel();
+    _orders.erase(order_it);
+    _locations.erase(loc_it);
+
+    return true;
+}
+
+void OrderBook::print_book() const
+{
+    std::cout << "\n========== ORDER BOOK ==========\n";
+    std::cout << "ASKS\n";
+    for (const auto& [price, level] : _asks)
+    {
+        Quantity total = 0;
+        for (const auto& order : level.orders)
+            total += order->remaining();
+        std::cout << price << " x " << total << '\n';
+    }
+    std::cout << "-------------------------------\n";
+    std::cout << "BIDS\n";
+    for (const auto& [price, level] : _bids)
+    {
+        Quantity total = 0;
+        for (const auto& order : level.orders)
+            total += order->remaining();
+        std::cout << price << " x " << total << '\n';
+    }
+    std::cout << "================================\n";
+}#include "Epoll.hpp"
+#include "IPollable.hpp"
+#include "Utils.hpp"
+
+Epoll::Epoll() : _fd(-1) {}
+
+Epoll::~Epoll()
+{
+	// std::set<IPollable*>	destory;
+
+	// for (auto it = _objs.begin(); it != _objs.end(); ++it)
+	// {
+	// 	IPollable* obj = it->second;
+	// 	if (obj)
+	// 		destory.insert(obj);
+	// }
+	// for (std::set<IPollable*>::iterator it = destory.begin(); it != destory.end(); ++it)
+	// {
+	// 	IPollable* obj = *it;
+	// 	if (obj)
+	// 		obj->cleanup();
+	// }
+}
+
+// Epoll&	Epoll::instance()
+// {
+// 	static Epoll	inst;
+// 	return (inst);
+// }
+
+int	Epoll::init()
+{
+	
+	_fd = epoll_create1(EPOLL_CLOEXEC);
+	if (_fd < 0)
+		throw_("epoll creation failed!");
+	return (0);
+}
+
+uint32_t	Epoll::flags(PollFlags flags)
+{
+	return ((flags & READ ? EPOLLIN : 0)
+			| (flags & WRITE ? EPOLLOUT : 0)
+			| (flags & ERR ? EPOLLERR : 0)
+			| (flags & HUP ? EPOLLHUP : 0))
+			| (flags & EDGE ? EPOLLET : 0);
+}
+
+PollFlags	Epoll::flags(uint32_t events)
+{
+	return (static_cast<PollFlags>
+			((events & EPOLLIN  ? READ  : 0)
+        	| (events & EPOLLOUT ? WRITE : 0)
+			| (events & EPOLLERR ? ERR : 0)
+			| (events & EPOLLHUP ? HUP : 0)));
+}
+
+int	Epoll::add_fd(IPollable* poll_obj, PollFlags events)
+{
+	if (_fd < 0)
+		throw_("No epoll object is found!");
+
+	struct epoll_event	ev{};
+	ev.events = flags(events);
+	ev.data.ptr = poll_obj;
+
+	int status = epoll_ctl(_fd, EPOLL_CTL_ADD, poll_obj->fd(), &ev);
+	if (status < 0)
+		throw_("epoll_ctl ADD failed!");
+	// _objs[obj_fd] = poll_obj;
+
+	return (status);
+}
+
+int Epoll::mod_fd(IPollable* poll_obj, PollFlags events)
+{
+	if (_fd < 0)
+		throw_("No epoll object is found!");
+	struct epoll_event	ev{};
+	ev.events = flags(events);
+	ev.data.ptr = poll_obj;
+	int status = epoll_ctl(_fd, EPOLL_CTL_MOD, poll_obj->fd(), &ev);
+	if (status < 0)
+		throw_("epoll_ctl MOD failed!");
+	return (status);
+}
+
+int Epoll::del_fd(IPollable* poll_obj)
+{
+    int	obj_fd = poll_obj->fd();
+   	int status = epoll_ctl(_fd, EPOLL_CTL_DEL, obj_fd, NULL);
+    if (status < 0)
+		throw_("epoll_ctl DELETE failed!");
+    return (status);
+}
+
+int Epoll::wait(Events &ready, int timeout)
+{
+	if (_fd < 0)
+		return (-1);
+	static struct epoll_event raw[1024]{};
+	int hits = epoll_wait(_fd, raw, MAX_EVENTS, timeout);
+	for(int i = 0; i < hits; ++i)
+	{
+		ready[i] = {static_cast<IPollable*>(raw[i].data.ptr), flags(raw[i].events)};
+	}
+	return (hits);
+}
+
+
+
+// void Epoll::objs_timeout()
+// {
+//     std::vector<IPollable*> timed_out;
+//     std::set<IPollable*> seen;
+    
+//     // Collect unique timed-out objects
+//     for (auto it = _objs.begin(); it != _objs.end(); ++it)
+//     {
+//         IPollable* obj = it->second;
+//         if (obj && obj->is_timeout())
+//         {
+//             if (seen.find(obj) == seen.end())
+//             {
+//                 seen.insert(obj);
+//                 timed_out.push_back(obj);
+//             }
+//         }
+//     }
+    
+//     // Call timeout on collected objects
+//     for (size_t i = 0; i < timed_out.size(); ++i)
+//     {
+//         IPollable* obj = timed_out[i];
+//         if (obj)
+//             obj->timeout();
+//     }
+// }
+
+int	Epoll::fd() const
+{
+	return (_fd);
+}
+#include "Kqueue.hpp"
+#include "IPollable.hpp"
+#include "Utils.hpp"
+
+Kqueue::Kqueue() : _fd(-1) {}
+
+Kqueue::~Kqueue() {}
+
+int Kqueue::init()
+{
+    _fd = kqueue();
+    if (_fd < 0)
+        throw_("kqueue creation failed!");
+    return (0);
+}
+
+PollFlags	Kqueue::flags(int filter, uint16_t evflags)
+{
+	return static_cast<PollFlags>(
+		  ((filter == EVFILT_READ)  ? READ : 0)
+		| ((filter == EVFILT_WRITE) ? WRITE : 0)
+		| ((evflags & EV_EOF)   ? HUP : 0)
+		| ((evflags & EV_ERROR) ? ERR : 0));
+}
+
+int Kqueue::add_fd(IPollable* poll_obj, uint32_t flags)
+{
+    struct kevent changes[2];
+    int n = 0;
+    uint16_t clear = (flags & EDGE) ? EV_CLEAR : 0;
+
+    if (flags & READ)
+        EV_SET(&changes[n++], poll_obj->fd(), EVFILT_READ, EV_ADD | clear, 0, 0, poll_obj);
+    if (flags & WRITE)
+        EV_SET(&changes[n++], poll_obj->fd(), EVFILT_WRITE, EV_ADD | clear, 0, 0, poll_obj);
+
+    return kevent(_fd, changes, n, nullptr, 0, nullptr);
+}
+
+int Kqueue::mod_fd(IPollable* poll_obj, uint32_t flags)
+{
+    return add_fd(poll_obj, flags);
+}
+
+int Kqueue::del_fd(IPollable* poll_obj)
+{
+    struct kevent changes[2];
+    EV_SET(&changes[0], poll_obj->fd(), EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    EV_SET(&changes[1], poll_obj->fd(), EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+    kevent(_fd, changes, 2, nullptr, 0, nullptr); // ENOENT expected if only 1 filter was set
+    return (0);
+}
+
+int Kqueue::wait(Events &ready, int timeout)
+{
+    static struct kevent raw[MAX_EVENTS];
+    struct timespec ts{timeout / 1000, (timeout % 1000) * 1000000};
+
+    int hits = kevent(_fd, nullptr, 0, raw, MAX_EVENTS, timeout >= 0 ? &ts : nullptr);
+    for (int i = 0; i < hits; ++i)
+		ready[i] = {static_cast<IPollable*>(raw[i].udata), flags(raw[i].filter, raw[i].flags)};
+    return (hits);
+}
+
+int Kqueue::fd() const { return (_fd); }#include "Reactor.hpp"
 #include "Utils.hpp"
 
 Reactor::Reactor() : _running(false)
@@ -1170,77 +1727,278 @@ void Reactor::run()
 void Reactor::stop()
 {
     _running = false;
-}#include "Server.hpp"
+}#include <iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include "Parser.hpp"
 
-Server::Server()
-{
-    std::string ip = "127.0.0.1", port = "8080";
-    _acceptor.create_socket(ip, port);
-    std::cout << "Server - " << ip << ":" << port << std::endl; 
-    _reactor.add(&_acceptor, READ | EDGE);
-    std::cout << "Server is added to epoll" << std::endl;
+// Utility to replace visual pipe symbols '|' with actual FIX SOH (\x01) delimiters
+inline std::string sanitize_fix(std::string msg) {
+    std::replace(msg.begin(), msg.end(), '|', '\x01');
+    return msg;
 }
 
-void    Server::run()
-{
-    _c_manager.set_reactor(_reactor);
-    _acceptor.set_c_manager(_c_manager);
-    _reactor.run();
-}// #include "Parser.hpp"
-#include "Server.hpp"
-#include "Reactor.hpp"
-#include "Ome.hpp"
+// Struct to hold individual test case definitions
+struct TestCase {
+    int id;
+    std::string name;
+    std::string raw_msg;
+    bool expected_valid;
+};
 
-int	main()
-{
-    std::string ip = "127.0.0.1", port = "8080";
-    Ome ome;
-    // ome.run();
-    ome.test_parser();
+// Runner function: compares actual parser output with expected boolean
+bool run_test(const TestCase& test) {
+    std::string formatted_msg = sanitize_fix(test.raw_msg);
+    bool actual_result = false;
 
-    // std::cout << parser[8] << std::endl;
-	std::cout << "Cmake is working" << std::endl;
+    try {
+        Parser parse(formatted_msg);
+        // Assuming parse.isValid() or parse.parse() returns a boolean outcome.
+        // Adjust this method call to match your Parser class API:
+        actual_result = parse.valid(); 
+    } 
+    catch (...) {
+        // If your parser throws on invalid input instead of returning false
+        actual_result = false; 
+    }
+
+    bool passed = (actual_result == test.expected_valid);
+
+    if (!passed)
+        std::cout << "parser err: " << (int)parser_errno << std::endl;
+    std::cout << "[" << (passed ? "PASS" : "FAIL") << "] Test " 
+              << (test.id < 10 ? "0" : "") << test.id << ": " 
+              << test.name << std::endl;
+
+    if (!passed) {
+        std::cout << "   Expected: " << (test.expected_valid ? "true" : "false")
+                  << " | Got: " << (actual_result ? "true" : "false") << "\n";
+    }
+
+    return passed;
 }
-cmake_minimum_required(VERSION 3.10)
+
+// Execution suite for all 44 FIX message scenarios
+void run_all_tests() {
+    const std::vector<TestCase> tests = {
+        // ID, Description, Raw FIX Message, Expected Result
+        {1, "Valid New Order Single", "8=FIX.4.4|9=72|35=1|49=BuySide|56=SellSide|34=2|52=20190605-16:56:17.419|112=TestReqID|10=215|", true},
+        {2, "Empty message", "", false},
+        {3, "Missing SOH", "8=FIX.4.49=10535=D34=149=CLIENT56=SERVER11=ORDER155=AAPL54=138=10040=244=150.5010=118", false},
+        {4, "Wrong first tag", "35=D|8=FIX.4.4|9=105|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {5, "Missing 9", "8=FIX.4.4|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {6, "Invalid BodyLength", "8=FIX.4.4|9=ABC|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {7, "BodyLength = 0", "8=FIX.4.4|9=0|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {8, "BodyLength too small", "8=FIX.4.4|9=5|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {9, "BodyLength too large", "8=FIX.4.4|9=500|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {10, "Body doesn't end at SOH", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.5010=118|", false},
+        {11, "Malformed field", "8=FIX.4.4|9=105|35D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {12, "Non-numeric tag", "8=FIX.4.4|9=105|XX=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {13, "Empty tag", "8=FIX.4.4|9=105|=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {14, "Empty field", "8=FIX.4.4|9=105|35=|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {15, "Duplicate tag", "8=FIX.4.4|9=105|35=D|34=1|34=2|49=CLIENT|56=SERVER|10=118|", false},
+        {16, "Missing checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|", false},
+        {17, "Wrong checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=999|", false},
+        {18, "Non-numeric checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=ABC|", false},
+        {19, "2-digit checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=18|", false},
+        {20, "4-digit checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=0118|", false},
+        {21, "Checksum > 255", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=256|", false},
+        {22, "Data after checksum", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|10=118|EXTRA", false},
+        {23, "Missing 35", "8=FIX.4.4|9=105|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {24, "Missing 34", "8=FIX.4.4|9=105|35=D|49=CLIENT|56=SERVER|10=118|", false},
+        {25, "Missing 49", "8=FIX.4.4|9=105|35=D|34=1|56=SERVER|10=118|", false},
+        {26, "Missing 56", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|10=118|", false},
+        {27, "35=D valid", "8=FIX.4.4|9=100|35=D|34=1|49=CLIENT|56=SERVER|52=20260925-16:46:00.000|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=106|", true},        {28, "35=D missing 11", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|55=AAPL|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {29, "35=D missing 55", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|54=1|38=100|40=2|44=150.50|10=118|", false},
+        {30, "35=D missing 54", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|38=100|40=2|44=150.50|10=118|", false},
+        {31, "35=D missing 38", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|40=2|44=150.50|10=118|", false},
+        {32, "35=D missing 40", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|44=150.50|10=118|", false},
+        {33, "Invalid 54", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=9|38=100|40=2|44=150.50|10=118|", false},
+        {34, "Invalid 38", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=-10|40=2|44=150.50|10=118|", false},
+        {35, "Invalid 44", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=FREE|10=118|", false},
+        {36, "Invalid 40", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=9|44=150.50|10=118|", false},
+        {37, "40=1 without 44", "8=FIX.4.4|9=90|35=D|34=1|49=CLIENT|56=SERVER|52=20260925-16:46:00.000|11=ORDER1|55=AAPL|54=1|38=100|40=1|10=114|", true}, // Market order doesn't need price
+        {38, "40=2 with 44", "8=FIX.4.4|9=100|35=D|34=1|49=CLIENT|56=SERVER|52=20260925-16:46:00.000|11=ORDER1|55=AAPL|54=1|38=100|40=2|44=150.50|10=106|", true}, // Limit order needs price
+        {39, "40=2 without 44", "8=FIX.4.4|9=105|35=D|34=1|49=CLIENT|56=SERVER|11=ORDER1|55=AAPL|54=1|38=100|40=2|10=118|", false},
+        {40, "Unknown 35", "8=FIX.4.4|9=105|35=ZZ|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {41, "Field-order violations", "8=FIX.4.4|9=105|34=1|35=D|49=CLIENT|56=SERVER|10=118|", false}, // Tag 35 must follow Tag 9
+        {42, "Extremely large fields", "8=FIX.4.4|9=105|35=D|34=1|49=" + std::string(1000, 'A') + "|56=SERVER|10=118|", false},
+        {43, "Extremely large BodyLength", "8=FIX.4.4|9=999999999|35=D|34=1|49=CLIENT|56=SERVER|10=118|", false},
+        {44, "Random/fuzz input", "alksjd%#$!@#\x01\x029=35=D|==", false}
+    };
+
+    int passed_count = 0;
+    for (const auto& test : tests) {
+        if (run_test(test)) {
+            passed_count++;
+        }
+    }
+
+    std::cout << "\n----------------------------------------\n";
+    std::cout << "Results: " << passed_count << " / " << tests.size() << " passed.\n";
+    std::cout << "----------------------------------------\n";
+}
+cmake_minimum_required(VERSION 3.14)
+
 project(OME VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(OME_SOURCES
-    src/Acceptor.cpp
-    src/ClientManager.cpp
-    src/Ome.cpp
-    src/Reactor.cpp
-    src/Client.cpp
-    src/Parser.cpp
-    src/Server.cpp
-    src/test/parser_test.cpp)
-
-if (APPLE)
-    list(APPEND OME_SOURCES src/Kqueue.cpp)
-else()
-    list(APPEND OME_SOURCES src/Epoll.cpp)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-add_library(ome_parser ${OME_SOURCES})
+find_package(Threads REQUIRED)
 
-target_include_directories(ome_parser PUBLIC include/ome)
+
+# ============================================================
+# Core
+# ============================================================
+
+set(OME_CORE_SOURCES
+    src/core/Ome.cpp
+	src/test/parser_test.cpp
+)
+
+
+# ============================================================
+# Concurrency
+# ============================================================
+
+# set(OME_CONCURRENCY_SOURCES
+#     src/concurrency/Spscqueue.cpp
+# )
+
+
+# ============================================================
+# FIX
+# ============================================================
+
+set(OME_FIX_SOURCES
+    # src/fix/FixMsg.cpp
+    src/fix/Parser.cpp
+)
+
+
+# ============================================================
+# Network
+# ============================================================
+
+set(OME_NETWORK_SOURCES
+    src/network/Acceptor.cpp
+    src/network/Client.cpp
+    src/network/ClientManager.cpp
+    src/network/Server.cpp
+)
+
+
+# ============================================================
+# Order
+# ============================================================
+
+set(OME_ORDER_SOURCES
+    src/order/Order.cpp
+    src/order/OrderBook.cpp
+)
+
+
+# ============================================================
+# Reactor
+# ============================================================
+
+set(OME_REACTOR_SOURCES
+    src/reactor/Reactor.cpp
+)
+
+if(APPLE)
+    list(APPEND OME_REACTOR_SOURCES src/reactor/Kqueue.cpp)
+else()
+    list(APPEND OME_REACTOR_SOURCES src/reactor/Epoll.cpp)
+endif()
+
+
+# ============================================================
+# All sources
+# ============================================================
+
+set(OME_SOURCES
+    ${OME_CORE_SOURCES}
+    ${OME_CONCURRENCY_SOURCES}
+    ${OME_FIX_SOURCES}
+    ${OME_NETWORK_SOURCES}
+    ${OME_ORDER_SOURCES}
+    ${OME_REACTOR_SOURCES}
+)
+
+
+# ============================================================
+# OME Library
+# ============================================================
+
+add_library(ome_core ${OME_SOURCES})
+
+target_include_directories(ome_core
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/include/core
+        ${PROJECT_SOURCE_DIR}/include/fix
+        ${PROJECT_SOURCE_DIR}/include/network
+        ${PROJECT_SOURCE_DIR}/include/order
+        ${PROJECT_SOURCE_DIR}/include/reactor
+		${PROJECT_SOURCE_DIR}/include/concurrency
+)
+
+target_link_libraries(ome_core
+    PUBLIC
+        Threads::Threads
+)
+
+target_compile_options(ome_core
+    PRIVATE
+        -Wall #-Wextra -Wpedantic
+)
+
+
+# ============================================================
+# OME Application
+# ============================================================
 
 add_executable(ome main.cpp)
-target_link_libraries(ome PRIVATE ome_parser)
 
-# # Tests
+target_link_libraries(ome
+    PRIVATE
+        ome_core
+)
 
-# find_package(GTest REQUIRED)
 
-# add_executable(tester
-#     tester.cpp)
+# ============================================================
+# Tests
+# ============================================================
 
-# target_link_libraries(tester
-# PRIVATE
-#     ome_parser
-#     GTest::gtest_main)
+option(OME_BUILD_TESTS "Build OME tests" OFF)
 
-# include(GoogleTest)
-# gtest_discover_tests(tester)
+if(OME_BUILD_TESTS)
+
+    enable_testing()
+
+    find_package(GTest REQUIRED)
+
+    add_executable(ome_tests
+        src/test/parser_test.cpp
+        # src/test/spscqueue_test.cpp   # add once the file exists
+    )
+
+    target_link_libraries(ome_tests
+        PRIVATE
+            ome_core
+            GTest::gtest_main
+    )
+
+    include(GoogleTest)
+    gtest_discover_tests(ome_tests)
+
+endif()

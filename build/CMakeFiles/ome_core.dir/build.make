@@ -170,10 +170,38 @@ CMakeFiles/ome_core.dir/src/network/Server.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ome_core.dir/src/network/Server.cpp.s"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/novailable/Developments/OME/src/network/Server.cpp -o CMakeFiles/ome_core.dir/src/network/Server.cpp.s
 
+CMakeFiles/ome_core.dir/src/order/Order.cpp.o: CMakeFiles/ome_core.dir/flags.make
+CMakeFiles/ome_core.dir/src/order/Order.cpp.o: /Users/novailable/Developments/OME/src/order/Order.cpp
+CMakeFiles/ome_core.dir/src/order/Order.cpp.o: CMakeFiles/ome_core.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/ome_core.dir/src/order/Order.cpp.o"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ome_core.dir/src/order/Order.cpp.o -MF CMakeFiles/ome_core.dir/src/order/Order.cpp.o.d -o CMakeFiles/ome_core.dir/src/order/Order.cpp.o -c /Users/novailable/Developments/OME/src/order/Order.cpp
+
+CMakeFiles/ome_core.dir/src/order/Order.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/ome_core.dir/src/order/Order.cpp.i"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/novailable/Developments/OME/src/order/Order.cpp > CMakeFiles/ome_core.dir/src/order/Order.cpp.i
+
+CMakeFiles/ome_core.dir/src/order/Order.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ome_core.dir/src/order/Order.cpp.s"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/novailable/Developments/OME/src/order/Order.cpp -o CMakeFiles/ome_core.dir/src/order/Order.cpp.s
+
+CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o: CMakeFiles/ome_core.dir/flags.make
+CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o: /Users/novailable/Developments/OME/src/order/OrderBook.cpp
+CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o: CMakeFiles/ome_core.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o -MF CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o.d -o CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o -c /Users/novailable/Developments/OME/src/order/OrderBook.cpp
+
+CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.i"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/novailable/Developments/OME/src/order/OrderBook.cpp > CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.i
+
+CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.s"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/novailable/Developments/OME/src/order/OrderBook.cpp -o CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.s
+
 CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o: CMakeFiles/ome_core.dir/flags.make
 CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o: /Users/novailable/Developments/OME/src/reactor/Reactor.cpp
 CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o: CMakeFiles/ome_core.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o -MF CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o.d -o CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o -c /Users/novailable/Developments/OME/src/reactor/Reactor.cpp
 
 CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.i: cmake_force
@@ -187,7 +215,7 @@ CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.s: cmake_force
 CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o: CMakeFiles/ome_core.dir/flags.make
 CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o: /Users/novailable/Developments/OME/src/reactor/Kqueue.cpp
 CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o: CMakeFiles/ome_core.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o"
 	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o -MF CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o.d -o CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o -c /Users/novailable/Developments/OME/src/reactor/Kqueue.cpp
 
 CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.i: cmake_force
@@ -207,6 +235,8 @@ ome_core_OBJECTS = \
 "CMakeFiles/ome_core.dir/src/network/Client.cpp.o" \
 "CMakeFiles/ome_core.dir/src/network/ClientManager.cpp.o" \
 "CMakeFiles/ome_core.dir/src/network/Server.cpp.o" \
+"CMakeFiles/ome_core.dir/src/order/Order.cpp.o" \
+"CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o" \
 "CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o" \
 "CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o"
 
@@ -220,11 +250,13 @@ libome_core.a: CMakeFiles/ome_core.dir/src/network/Acceptor.cpp.o
 libome_core.a: CMakeFiles/ome_core.dir/src/network/Client.cpp.o
 libome_core.a: CMakeFiles/ome_core.dir/src/network/ClientManager.cpp.o
 libome_core.a: CMakeFiles/ome_core.dir/src/network/Server.cpp.o
+libome_core.a: CMakeFiles/ome_core.dir/src/order/Order.cpp.o
+libome_core.a: CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o
 libome_core.a: CMakeFiles/ome_core.dir/src/reactor/Reactor.cpp.o
 libome_core.a: CMakeFiles/ome_core.dir/src/reactor/Kqueue.cpp.o
 libome_core.a: CMakeFiles/ome_core.dir/build.make
 libome_core.a: CMakeFiles/ome_core.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Linking CXX static library libome_core.a"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/novailable/Developments/OME/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Linking CXX static library libome_core.a"
 	$(CMAKE_COMMAND) -P CMakeFiles/ome_core.dir/cmake_clean_target.cmake
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/ome_core.dir/link.txt --verbose=$(VERBOSE)
 

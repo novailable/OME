@@ -59,10 +59,10 @@ set(OME_NETWORK_SOURCES
 # Order
 # ============================================================
 
-# set(OME_ORDER_SOURCES
-#     src/order/Order.cpp
-#     src/order/OrderManager.cpp
-# )
+set(OME_ORDER_SOURCES
+    src/order/Order.cpp
+    src/order/OrderBook.cpp
+)
 
 
 # ============================================================
@@ -89,7 +89,7 @@ set(OME_SOURCES
     ${OME_CONCURRENCY_SOURCES}
     ${OME_FIX_SOURCES}
     ${OME_NETWORK_SOURCES}
-    # ${OME_ORDER_SOURCES}
+    ${OME_ORDER_SOURCES}
     ${OME_REACTOR_SOURCES}
 )
 

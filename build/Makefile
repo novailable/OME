@@ -310,6 +310,54 @@ src/network/Server.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_core.dir/build.make CMakeFiles/ome_core.dir/src/network/Server.cpp.s
 .PHONY : src/network/Server.cpp.s
 
+src/order/Order.o: src/order/Order.cpp.o
+.PHONY : src/order/Order.o
+
+# target to build an object file
+src/order/Order.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_core.dir/build.make CMakeFiles/ome_core.dir/src/order/Order.cpp.o
+.PHONY : src/order/Order.cpp.o
+
+src/order/Order.i: src/order/Order.cpp.i
+.PHONY : src/order/Order.i
+
+# target to preprocess a source file
+src/order/Order.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_core.dir/build.make CMakeFiles/ome_core.dir/src/order/Order.cpp.i
+.PHONY : src/order/Order.cpp.i
+
+src/order/Order.s: src/order/Order.cpp.s
+.PHONY : src/order/Order.s
+
+# target to generate assembly for a file
+src/order/Order.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_core.dir/build.make CMakeFiles/ome_core.dir/src/order/Order.cpp.s
+.PHONY : src/order/Order.cpp.s
+
+src/order/OrderBook.o: src/order/OrderBook.cpp.o
+.PHONY : src/order/OrderBook.o
+
+# target to build an object file
+src/order/OrderBook.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_core.dir/build.make CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.o
+.PHONY : src/order/OrderBook.cpp.o
+
+src/order/OrderBook.i: src/order/OrderBook.cpp.i
+.PHONY : src/order/OrderBook.i
+
+# target to preprocess a source file
+src/order/OrderBook.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_core.dir/build.make CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.i
+.PHONY : src/order/OrderBook.cpp.i
+
+src/order/OrderBook.s: src/order/OrderBook.cpp.s
+.PHONY : src/order/OrderBook.s
+
+# target to generate assembly for a file
+src/order/OrderBook.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ome_core.dir/build.make CMakeFiles/ome_core.dir/src/order/OrderBook.cpp.s
+.PHONY : src/order/OrderBook.cpp.s
+
 src/reactor/Kqueue.o: src/reactor/Kqueue.cpp.o
 .PHONY : src/reactor/Kqueue.o
 
@@ -413,6 +461,12 @@ help:
 	@echo "... src/network/Server.o"
 	@echo "... src/network/Server.i"
 	@echo "... src/network/Server.s"
+	@echo "... src/order/Order.o"
+	@echo "... src/order/Order.i"
+	@echo "... src/order/Order.s"
+	@echo "... src/order/OrderBook.o"
+	@echo "... src/order/OrderBook.i"
+	@echo "... src/order/OrderBook.s"
 	@echo "... src/reactor/Kqueue.o"
 	@echo "... src/reactor/Kqueue.i"
 	@echo "... src/reactor/Kqueue.s"
